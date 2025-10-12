@@ -28,6 +28,11 @@ import (
 func StartApp() *gin.Engine {
 	r := gin.Default()
 
+	// Health check endpoints
+	r.GET("/health", controllers.HealthCheck)
+	r.GET("/health/ready", controllers.ReadinessCheck)
+	r.GET("/health/live", controllers.LivenessCheck)
+
 	userRouter := r.Group("/users")
 	{
 		// Create

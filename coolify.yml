@@ -1,0 +1,87 @@
+# Coolify Configuration for MyGram API
+# This file helps Coolify understand your application structure
+
+version: "1.0"
+
+# Application metadata
+app:
+  name: "mygram-api"
+  description: "Social Media Backend API built with Go and Gin"
+  framework: "golang"
+  build_pack: "docker"
+
+# Build configuration
+build:
+  dockerfile: "Dockerfile"
+  context: "."
+  args:
+    - GO_VERSION=1.20
+
+# Deployment configuration
+deploy:
+  # Container configuration
+  container:
+    port: 8080
+    restart_policy: "always"
+    memory_limit: "512m"
+    cpu_limit: "1"
+    
+  # Health checks
+  health_check:
+    path: "/health"
+    port: 8080
+    interval: 30
+    timeout: 10
+    retries: 3
+    start_period: 60
+    
+  # Environment variables (will be set in Coolify UI)
+  environment:
+    - "PORT=8080"
+    - "GIN_MODE=release"
+    - "DB_HOST=${DB_HOST}"
+    - "DB_USER=${DB_USER}"
+    - "DB_PASSWORD=${DB_PASSWORD}"
+    - "DB_NAME=${DB_NAME}"
+    - "DB_PORT=${DB_PORT}"
+    - "JWT_SECRET=${JWT_SECRET}"
+
+# Database requirements
+databases:
+  - type: "postgresql"
+    version: "15"
+    name: "mygram-postgres"
+    environment:
+      - "POSTGRES_DB=finalproject"
+      - "POSTGRES_USER=postgres"
+    
+# Additional services
+services:
+  - type: "redis"
+    version: "7"
+    name: "mygram-redis"
+    optional: true
+
+# Domains and networking
+networking:
+  domains:
+    - "api.yourdomain.com"  # Replace with your actual domain
+  ssl: true
+  
+# Volumes (if needed)
+volumes:
+  - name: "postgres_data"
+    mount_path: "/var/lib/postgresql/data"
+    
+# Monitoring and logging
+monitoring:
+  enable_logs: true
+  log_retention_days: 30
+  enable_metrics: true
+
+# Backup configuration
+backups:
+  database:
+    enabled: true
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    retention_days: 7

@@ -1,0 +1,216 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, final-project ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  GO_VERSION: '1.20'
+
+jobs:
+  # Job 1: Test and Build
+  test-and-build:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: admin
+          POSTGRES_USER: postgres
+          POSTGRES_DB: finalproject_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Run go fmt check
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "Code is not formatted. Please run 'go fmt ./...'"
+          gofmt -s -l .
+          exit 1
+        fi
+
+    - name: Run tests
+      env:
+        DB_HOST: localhost
+        DB_USER: postgres
+        DB_PASSWORD: admin
+        DB_NAME: finalproject_test
+        DB_PORT: 5432
+      run: go test -v -race -coverprofile=coverage.out ./...
+
+    - name: Generate coverage report
+      run: go tool cover -html=coverage.out -o coverage.html
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+
+    - name: Build application
+      run: |
+        CGO_ENABLED=0 GOOS=linux go build -v -o mygram main.go
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: mygram-binary
+        path: mygram
+
+  # Job 2: Security Scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: test-and-build
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Gosec Security Scanner
+      uses: securecodewarrior/github-action-gosec@v1
+      with:
+        args: './...'
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@0.24.0
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '0'  # Don't fail the build on vulnerabilities
+
+  # Job 3: Docker Build and Push
+  docker-build-push:
+    runs-on: ubuntu-latest
+    needs: [test-and-build, security-scan]
+    if: github.event_name == 'push'
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix=sha-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Job 4: Trigger Jenkins Pipeline (Optional)
+  trigger-jenkins:
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/final-project'
+    
+    steps:
+    - name: Trigger Jenkins Pipeline
+      run: |
+        JENKINS_URL="${{ secrets.JENKINS_URL }}"
+        JENKINS_TOKEN="${{ secrets.JENKINS_API_TOKEN }}"
+        
+        if [ -n "$JENKINS_TOKEN" ] && [ -n "$JENKINS_URL" ]; then
+          echo "Triggering Jenkins pipeline..."
+          curl -X POST \
+            -H "Authorization: Bearer $JENKINS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"parameter\": [
+                {
+                  \"name\": \"IMAGE_TAG\",
+                  \"value\": \"sha-${{ github.sha }}\"
+                },
+                {
+                  \"name\": \"GIT_BRANCH\",
+                  \"value\": \"${{ github.ref_name }}\"
+                }
+              ]
+            }" \
+            "$JENKINS_URL/job/mygram-deployment/buildWithParameters" || echo "Jenkins trigger failed (optional)"
+        else
+          echo "Jenkins credentials not configured, skipping Jenkins trigger"
+        fi
+
+  # Job 5: Deploy Notification
+  deploy-notification:
+    runs-on: ubuntu-latest
+    needs: [docker-build-push, trigger-jenkins]
+    if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/final-project')
+    
+    steps:
+    - name: Deployment Status
+      run: |
+        if [ "${{ needs.docker-build-push.result }}" == "success" ]; then
+          echo "✅ Docker image built and pushed successfully"
+          echo "📦 Image: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}"
+          echo "🚀 Ready for deployment via Jenkins/Coolify"
+        else
+          echo "❌ Deployment failed at Docker build stage"
+        fi
