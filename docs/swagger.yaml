@@ -251,6 +251,60 @@ paths:
       summary: Update comment
       tags:
       - comment
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Check if the application is running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Application is healthy
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health check endpoint
+      tags:
+      - health
+  /health/live:
+    get:
+      consumes:
+      - application/json
+      description: Check if the application is alive
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Application is alive
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Liveness check endpoint
+      tags:
+      - health
+  /health/ready:
+    get:
+      consumes:
+      - application/json
+      description: Check if the application is ready to serve requests (includes DB
+        check)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Application is ready
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Application is not ready
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Readiness check endpoint
+      tags:
+      - health
   /photos/create:
     post:
       consumes:
@@ -544,8 +598,7 @@ paths:
       responses:
         "200":
           description: Login response
-          schema:
-            type: object
+          schema: {}
         "401":
           description: Unauthorized
       summary: Login user

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"finalproject/database"
 	"finalproject/router"
 	"fmt"
 	"os"
@@ -14,7 +13,7 @@ func main() {
 		return
 	}
 
-	database.StartDB()
+	// database.StartDB()
 	r := router.StartApp()
 	
 	// Get port from environment or default to 8080

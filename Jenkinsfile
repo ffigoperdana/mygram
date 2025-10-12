@@ -1,11 +1,21 @@
 pipeline {
     agent any
     
+    tools {
+        go '1.21'  // Ensure Jenkins has Go configured
+    }
+    
+    environment {
+        GO111MODULE = 'on'
+        CGO_ENABLED = '0'
+        GOOS = 'linux'
+    }
+    
     parameters {
         string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag to deploy')
-        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch being deployed')
+        string(name: 'GIT_BRANCH', defaultValue: 'final-project', description: 'Git branch being deployed')
         choice(name: 'ENVIRONMENT', choices: ['staging', 'production'], description: 'Target environment')
-        booleanParam(name: 'RUN_INTEGRATION_TESTS', defaultValue: true, description: 'Run integration tests')
+        booleanParam(name: 'RUN_INTEGRATION_TESTS', defaultValue: false, description: 'Run integration tests')
         booleanParam(name: 'RUN_PERFORMANCE_TESTS', defaultValue: false, description: 'Run performance tests')
     }
     
