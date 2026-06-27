@@ -1,15 +1,6 @@
-import "cap-widget";
-
-import type { CapErrorEvent, CapSolveEvent, CapWidget } from "cap-widget";
-import {
-  type CSSProperties,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { RefreshCcw, ShieldCheck, ShieldQuestion } from "lucide-react";
+import Cap, { type CapErrorEvent, type CapProgressEvent } from "cap-widget";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, RefreshCcw, ShieldCheck, ShieldQuestion } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,15 +17,7 @@ type CapCaptchaProps = {
   onChange: (token: string) => void;
 };
 
-const capWidgetStyle = {
-  "--cap-widget-width": "100%",
-  "--cap-widget-height": "58px",
-  "--cap-border-radius": "8px",
-  "--cap-background": "hsl(var(--background))",
-  "--cap-border-color": "hsl(var(--border))",
-  "--cap-color": "hsl(var(--foreground))",
-  "--cap-focus-ring": "hsl(var(--ring))",
-} as CSSProperties;
+type VerificationState = "idle" | "verifying" | "verified" | "error";
 
 function getCapConfig() {
   return {
@@ -46,10 +29,11 @@ function getCapConfig() {
 
 export function CapCaptcha({ value, onChange }: CapCaptchaProps) {
   const [open, setOpen] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [verificationState, setVerificationState] = useState<VerificationState>("idle");
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
-  const widgetRef = useRef<CapWidget | null>(null);
-  const detachWidgetListenersRef = useRef<(() => void) | null>(null);
+  const activeCapRef = useRef<Cap | null>(null);
+  const runIdRef = useRef(0);
   const capConfig = getCapConfig();
   const apiEndpoint = useMemo(() => {
     if (!capConfig.enabled || !capConfig.baseUrl || !capConfig.siteKey) {
@@ -59,52 +43,104 @@ export function CapCaptcha({ value, onChange }: CapCaptchaProps) {
     return `${capConfig.baseUrl.replace(/\/$/, "")}/${encodeURIComponent(capConfig.siteKey)}/`;
   }, [capConfig.baseUrl, capConfig.enabled, capConfig.siteKey]);
 
-  const attachWidgetRef = useCallback(
-    (widget: CapWidget | null) => {
-      detachWidgetListenersRef.current?.();
-      detachWidgetListenersRef.current = null;
-      widgetRef.current = widget;
+  const cleanupActiveCap = useCallback(() => {
+    const activeCap = activeCapRef.current;
+    activeCapRef.current = null;
+    if (!activeCap) {
+      return;
+    }
 
-      if (!widget || !apiEndpoint) {
-        return;
-      }
-
-      function handleSolve(event: CapSolveEvent) {
-        if (event.detail.token) {
-          setError("");
-          onChange(event.detail.token);
-          setOpen(false);
-        }
-      }
-
-      function handleReset() {
-        onChange("");
-      }
-
-      function handleError(event: CapErrorEvent) {
-        setError(event.detail.message || "Captcha verification could not start.");
-        onChange("");
-      }
-
-      widget.addEventListener("solve", handleSolve);
-      widget.addEventListener("reset", handleReset);
-      widget.addEventListener("error", handleError);
-
-      detachWidgetListenersRef.current = () => {
-        widget.removeEventListener("solve", handleSolve);
-        widget.removeEventListener("reset", handleReset);
-        widget.removeEventListener("error", handleError);
-      };
-    },
-    [apiEndpoint, onChange],
-  );
+    try {
+      activeCap.reset();
+      activeCap.widget.remove();
+    } catch {
+      // The Cap widget owns its internal cleanup. Ignore post-solve cleanup races.
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
-      detachWidgetListenersRef.current?.();
-      detachWidgetListenersRef.current = null;
+      runIdRef.current += 1;
+      cleanupActiveCap();
     };
-  }, []);
+  }, [cleanupActiveCap]);
+
+  const startVerification = useCallback(async () => {
+    if (!apiEndpoint) {
+      setError("Captcha is enabled but frontend Cap configuration is incomplete.");
+      return;
+    }
+
+    const runId = runIdRef.current + 1;
+    runIdRef.current = runId;
+    cleanupActiveCap();
+    onChange("");
+    setOpen(true);
+    setError("");
+    setProgress(0);
+    setVerificationState("verifying");
+
+    try {
+      const cap = new Cap({
+        apiEndpoint,
+        "data-cap-worker-count": "2",
+        "data-cap-hidden-field-name": "captcha_token",
+      });
+      activeCapRef.current = cap;
+
+      cap.addEventListener("progress", (event: CapProgressEvent) => {
+        if (runIdRef.current === runId) {
+          setProgress(Math.max(0, Math.min(100, Math.round(event.detail.progress))));
+        }
+      });
+      cap.addEventListener("error", (event: CapErrorEvent) => {
+        if (runIdRef.current === runId) {
+          setError(event.detail.message || "Captcha verification could not start.");
+          setVerificationState("error");
+        }
+      });
+
+      const result = await cap.solve();
+      if (runIdRef.current !== runId) {
+        return;
+      }
+
+      if (!result.success || !result.token) {
+        throw new Error("Captcha verification did not return a token.");
+      }
+
+      onChange(result.token);
+      setProgress(100);
+      setVerificationState("verified");
+      window.setTimeout(() => {
+        if (runIdRef.current === runId) {
+          setOpen(false);
+          cleanupActiveCap();
+        }
+      }, 450);
+    } catch (solveError) {
+      if (runIdRef.current !== runId) {
+        return;
+      }
+
+      setProgress(0);
+      setVerificationState("error");
+      setError(
+        solveError instanceof Error
+          ? solveError.message
+          : "Captcha verification could not start.",
+      );
+      onChange("");
+      cleanupActiveCap();
+    }
+  }, [apiEndpoint, cleanupActiveCap, onChange]);
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen && verificationState !== "verifying") {
+      cleanupActiveCap();
+    }
+  }
 
   if (!capConfig.enabled) {
     return null;
@@ -146,12 +182,7 @@ export function CapCaptcha({ value, onChange }: CapCaptchaProps) {
           size="sm"
           variant={value ? "outline" : "secondary"}
           onClick={() => {
-            if (value) {
-              onChange("");
-            }
-            setError("");
-            setRefreshKey((current) => current + 1);
-            setOpen(true);
+            void startVerification();
           }}
         >
           {value ? "Verify again" : "Verify human"}
@@ -159,7 +190,7 @@ export function CapCaptcha({ value, onChange }: CapCaptchaProps) {
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Verify you are human</DialogTitle>
@@ -168,26 +199,54 @@ export function CapCaptcha({ value, onChange }: CapCaptchaProps) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-3">
-            <div className="overflow-hidden rounded-md">
-              <cap-widget
-                key={refreshKey}
-                ref={attachWidgetRef}
-                style={capWidgetStyle}
-                required
-                data-cap-api-endpoint={apiEndpoint}
-                data-cap-hidden-field-name="captcha_token"
-              />
+          <div className="grid gap-4">
+            <div className="rounded-md border bg-background p-4">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  {verificationState === "verified" ? (
+                    <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+                  ) : (
+                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {verificationState === "verified"
+                      ? "Verification complete"
+                      : verificationState === "error"
+                        ? "Verification failed"
+                        : "Checking your browser"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {verificationState === "verified"
+                      ? "You can continue signing in."
+                      : verificationState === "error"
+                        ? "Refresh the check and try again."
+                        : "This usually takes a few seconds."}
+                  </p>
+                </div>
+              </div>
+              <div
+                className="mt-4 h-2 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progress}
+              >
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             <Button
               type="button"
               variant="ghost"
               className="justify-self-start px-0"
+              disabled={verificationState === "verifying"}
               onClick={() => {
-                onChange("");
-                setError("");
-                setRefreshKey((current) => current + 1);
+                void startVerification();
               }}
             >
               <RefreshCcw className="mr-2 h-4 w-4" aria-hidden="true" />

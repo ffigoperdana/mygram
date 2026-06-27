@@ -76,8 +76,11 @@ For Jenkins:
 ```bash
 GHCR_USERNAME=<github-username-or-org>
 GHCR_TOKEN=<github-token-with-package-write>
-COOLIFY_WEBHOOK_URL=<coolify-deploy-webhook>
+COOLIFY_BASE_URL=http://192.168.18.37:8000
+COOLIFY_RESOURCE_UUID=<mygram-coolify-application-uuid>
 ```
+
+Store the Coolify API token as a Jenkins secret text credential named `coolify-api-token`. Do not use a stale `coolify-app-uuid` credential unless it actually contains the MyGram application UUID shown in the Coolify application URL.
 
 ## Optional Local Fullstack Docker Test
 
@@ -141,7 +144,13 @@ BACKEND_IMAGE=ghcr.io/<owner>/<repo>-api:main
 FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:main
 ```
 
-6. Trigger Coolify redeploy using its webhook/API.
+6. Trigger Coolify redeploy using the Coolify API:
+
+```bash
+curl --fail --show-error --location --request GET \
+  "http://192.168.18.37:8000/api/v1/deploy?uuid=<mygram-coolify-application-uuid>&force=false" \
+  --header "Authorization: Bearer <coolify-api-token>"
+```
 
 For production CI/CD, Jenkins pushes both immutable SHA tags and mutable `:main` tags from the `main` branch. Coolify should use the mutable `:main` image tags so the Jenkins deploy webhook can redeploy the newest images without manually editing Coolify variables.
 

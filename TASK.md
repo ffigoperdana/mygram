@@ -157,7 +157,7 @@ Recommended split:
 - [ ] F1. Remove or disable stale duplicate workflows after creating the final workflow.
 - [ ] F2. Create one GitHub Actions workflow for PRs: Go test/vet, frontend lint/typecheck/build, and optional Playwright smoke.
 - [ ] F3. Rewrite `Jenkinsfile` for fullstack: checkout, test backend, test frontend, build backend image, build frontend image, push both to GHCR, trigger Coolify redeploy.
-- [ ] F4. Store GHCR credentials, Coolify webhook/API token, database password, JWT secret, and production domains in Jenkins/Coolify secrets.
+- [ ] F4. Store GHCR credentials, the `coolify-api-token` Jenkins credential, the MyGram Coolify resource UUID/base URL, database password, JWT secret, and production domains in Jenkins/Coolify secrets.
 - [ ] F5. Tag images with git SHA and optionally `latest` on main.
 - [ ] F6. Add rollback instructions: redeploy previous GHCR SHA image tags in Coolify.
 - [ ] F7. Add CI security gates: dependency audit, secret scan, and container image vulnerability scan before deploy.

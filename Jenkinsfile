@@ -15,7 +15,9 @@ pipeline {
         string(name: 'CAP_SITE_KEY', defaultValue: '8d1607b07b', description: 'Frontend Cap captcha site key. Required when CAP_ENABLED=true.')
         booleanParam(name: 'CAP_REQUIRED_ON_LOGIN', defaultValue: true, description: 'Require Cap captcha on the login form.')
         string(name: 'GHCR_OWNER_REPO', defaultValue: 'ghcr.io/ffigoperdana/mygram', description: 'Required when PUSH_IMAGES=true, for example ghcr.io/owner/mygram.')
-        booleanParam(name: 'DEPLOY_TO_COOLIFY', defaultValue: true, description: 'Trigger the Coolify deploy webhook after pushing main images. Requires Jenkins secret text credentials coolify-deploy-webhook-url and coolify-token.')
+        booleanParam(name: 'DEPLOY_TO_COOLIFY', defaultValue: true, description: 'Trigger Coolify redeploy after pushing main images. Requires Jenkins secret text credential coolify-api-token.')
+        string(name: 'COOLIFY_BASE_URL', defaultValue: 'http://192.168.18.37:8000', description: 'Internal Coolify base URL reachable from Jenkins.')
+        string(name: 'COOLIFY_RESOURCE_UUID', defaultValue: 'elqs1vtmi6hw7afeevjj1vum', description: 'Coolify application/resource UUID for MyGram.')
     }
 
     environment {
@@ -24,6 +26,14 @@ pipeline {
         BACKEND_LOCAL_IMAGE = 'mygram-api:jenkins'
         FRONTEND_LOCAL_IMAGE = 'mygram-web:jenkins'
         CI_JWT_SECRET = 'ci-jwt-secret-that-is-long-enough-for-mygram'
+        DEFAULT_PUBLIC_API_BASE_URL = 'https://api.mygram.fgdev.tech'
+        DEFAULT_CAP_ENABLED = 'true'
+        DEFAULT_CAP_BASE_URL = 'https://cap.fgdev.tech'
+        DEFAULT_CAP_SITE_KEY = '8d1607b07b'
+        DEFAULT_CAP_REQUIRED_ON_LOGIN = 'true'
+        DEFAULT_GHCR_OWNER_REPO = 'ghcr.io/ffigoperdana/mygram'
+        DEFAULT_COOLIFY_BASE_URL = 'http://192.168.18.37:8000'
+        DEFAULT_COOLIFY_RESOURCE_UUID = 'elqs1vtmi6hw7afeevjj1vum'
     }
 
     stages {
@@ -33,6 +43,16 @@ pipeline {
                 script {
                     env.GIT_SHORT_SHA = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
                     env.EFFECTIVE_IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.GIT_SHORT_SHA
+                    env.EFFECTIVE_PUBLIC_API_BASE_URL = params.PUBLIC_API_BASE_URL?.trim() ?: env.DEFAULT_PUBLIC_API_BASE_URL
+                    env.EFFECTIVE_CAP_ENABLED = params.CAP_ENABLED == null ? env.DEFAULT_CAP_ENABLED : params.CAP_ENABLED.toString()
+                    env.EFFECTIVE_CAP_BASE_URL = params.CAP_BASE_URL?.trim() ?: env.DEFAULT_CAP_BASE_URL
+                    env.EFFECTIVE_CAP_SITE_KEY = params.CAP_SITE_KEY?.trim() ?: env.DEFAULT_CAP_SITE_KEY
+                    env.EFFECTIVE_CAP_REQUIRED_ON_LOGIN = params.CAP_REQUIRED_ON_LOGIN == null ? env.DEFAULT_CAP_REQUIRED_ON_LOGIN : params.CAP_REQUIRED_ON_LOGIN.toString()
+                    env.EFFECTIVE_GHCR_OWNER_REPO = params.GHCR_OWNER_REPO?.trim() ?: env.DEFAULT_GHCR_OWNER_REPO
+                    env.EFFECTIVE_PUSH_IMAGES = params.PUSH_IMAGES == null ? 'true' : params.PUSH_IMAGES.toString()
+                    env.EFFECTIVE_DEPLOY_TO_COOLIFY = params.DEPLOY_TO_COOLIFY == null ? 'true' : params.DEPLOY_TO_COOLIFY.toString()
+                    env.EFFECTIVE_COOLIFY_BASE_URL = params.COOLIFY_BASE_URL?.trim() ?: env.DEFAULT_COOLIFY_BASE_URL
+                    env.EFFECTIVE_COOLIFY_RESOURCE_UUID = params.COOLIFY_RESOURCE_UUID?.trim() ?: env.DEFAULT_COOLIFY_RESOURCE_UUID
                 }
             }
         }
@@ -74,16 +94,16 @@ pipeline {
                     sh 'npm run lint'
                     sh 'npm run test'
                     sh '''
-                        if [ "${CAP_ENABLED}" = "true" ] && [ -z "${CAP_SITE_KEY}" ]; then
+                        if [ "${EFFECTIVE_CAP_ENABLED}" = "true" ] && [ -z "${EFFECTIVE_CAP_SITE_KEY}" ]; then
                           echo "CAP_SITE_KEY is required when CAP_ENABLED=true"
                           exit 1
                         fi
 
-                        VITE_API_BASE_URL="${PUBLIC_API_BASE_URL}" \
-                        VITE_CAP_ENABLED="${CAP_ENABLED}" \
-                        VITE_CAP_BASE_URL="${CAP_BASE_URL}" \
-                        VITE_CAP_SITE_KEY="${CAP_SITE_KEY}" \
-                        VITE_CAP_REQUIRED_ON_LOGIN="${CAP_REQUIRED_ON_LOGIN}" \
+                        VITE_API_BASE_URL="${EFFECTIVE_PUBLIC_API_BASE_URL}" \
+                        VITE_CAP_ENABLED="${EFFECTIVE_CAP_ENABLED}" \
+                        VITE_CAP_BASE_URL="${EFFECTIVE_CAP_BASE_URL}" \
+                        VITE_CAP_SITE_KEY="${EFFECTIVE_CAP_SITE_KEY}" \
+                        VITE_CAP_REQUIRED_ON_LOGIN="${EFFECTIVE_CAP_REQUIRED_ON_LOGIN}" \
                         npm run build
                     '''
                 }
@@ -94,17 +114,17 @@ pipeline {
             steps {
                 sh 'docker build -t "${BACKEND_LOCAL_IMAGE}" .'
                 sh '''
-                    if [ "${CAP_ENABLED}" = "true" ] && [ -z "${CAP_SITE_KEY}" ]; then
+                    if [ "${EFFECTIVE_CAP_ENABLED}" = "true" ] && [ -z "${EFFECTIVE_CAP_SITE_KEY}" ]; then
                       echo "CAP_SITE_KEY is required when CAP_ENABLED=true"
                       exit 1
                     fi
 
                     docker build \
-                      --build-arg VITE_API_BASE_URL="${PUBLIC_API_BASE_URL}" \
-                      --build-arg VITE_CAP_ENABLED="${CAP_ENABLED}" \
-                      --build-arg VITE_CAP_BASE_URL="${CAP_BASE_URL}" \
-                      --build-arg VITE_CAP_SITE_KEY="${CAP_SITE_KEY}" \
-                      --build-arg VITE_CAP_REQUIRED_ON_LOGIN="${CAP_REQUIRED_ON_LOGIN}" \
+                      --build-arg VITE_API_BASE_URL="${EFFECTIVE_PUBLIC_API_BASE_URL}" \
+                      --build-arg VITE_CAP_ENABLED="${EFFECTIVE_CAP_ENABLED}" \
+                      --build-arg VITE_CAP_BASE_URL="${EFFECTIVE_CAP_BASE_URL}" \
+                      --build-arg VITE_CAP_SITE_KEY="${EFFECTIVE_CAP_SITE_KEY}" \
+                      --build-arg VITE_CAP_REQUIRED_ON_LOGIN="${EFFECTIVE_CAP_REQUIRED_ON_LOGIN}" \
                       -t "${FRONTEND_LOCAL_IMAGE}" \
                       ./mygram-frontend
                 '''
@@ -162,12 +182,12 @@ pipeline {
             when {
                 allOf {
                     branch 'main'
-                    expression { return params.PUSH_IMAGES }
+                    expression { return env.EFFECTIVE_PUSH_IMAGES == 'true' }
                 }
             }
             steps {
                 script {
-                    def imagePrefix = params.GHCR_OWNER_REPO?.trim()
+                    def imagePrefix = env.EFFECTIVE_GHCR_OWNER_REPO?.trim()
                     if (!imagePrefix) {
                         error('GHCR_OWNER_REPO is required when PUSH_IMAGES=true, for example ghcr.io/owner/mygram')
                     }
@@ -203,18 +223,25 @@ pipeline {
             when {
                 allOf {
                     branch 'main'
-                    expression { return params.PUSH_IMAGES }
-                    expression { return params.DEPLOY_TO_COOLIFY }
+                    expression { return env.EFFECTIVE_PUSH_IMAGES == 'true' }
+                    expression { return env.EFFECTIVE_DEPLOY_TO_COOLIFY == 'true' }
                 }
             }
             steps {
                 withCredentials([
-                    string(credentialsId: 'coolify-deploy-webhook-url', variable: 'COOLIFY_DEPLOY_WEBHOOK_URL'),
-                    string(credentialsId: 'coolify-token', variable: 'COOLIFY_TOKEN')
+                    string(credentialsId: 'coolify-api-token', variable: 'COOLIFY_API_TOKEN')
                 ]) {
                     sh '''
-                        curl --fail --show-error --location --request GET "$COOLIFY_DEPLOY_WEBHOOK_URL" \
-                          --header "Authorization: Bearer $COOLIFY_TOKEN"
+                        set +x
+                        if [ -z "${EFFECTIVE_COOLIFY_BASE_URL}" ] || [ -z "${EFFECTIVE_COOLIFY_RESOURCE_UUID}" ]; then
+                          echo "COOLIFY_BASE_URL and COOLIFY_RESOURCE_UUID are required when DEPLOY_TO_COOLIFY=true"
+                          exit 1
+                        fi
+
+                        COOLIFY_URL="${EFFECTIVE_COOLIFY_BASE_URL%/}"
+                        curl --fail --show-error --location --request GET \
+                          "${COOLIFY_URL}/api/v1/deploy?uuid=${EFFECTIVE_COOLIFY_RESOURCE_UUID}&force=false" \
+                          --header "Authorization: Bearer ${COOLIFY_API_TOKEN}"
                     '''
                 }
             }
