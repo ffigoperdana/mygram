@@ -13,3 +13,30 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Build output
+coverage.out
+coverage.html
+dist/
+build/
+.cache/
+.gocache/
+.gopath/
+.gomodcache/
+
+# Frontend dependencies and generated files
+node_modules/
+mygram-frontend/node_modules/
+mygram-frontend/dist/
+mygram-frontend/reports/
+mygram-frontend/test-results/
+mygram-frontend/playwright-report/
+mygram-frontend/.tmp/
+mygram-frontend/.env
+mygram-frontend/.env.*
+!mygram-frontend/.env.example
