@@ -15,7 +15,7 @@ pipeline {
         string(name: 'CAP_SITE_KEY', defaultValue: '', description: 'Frontend Cap captcha site key. Required when CAP_ENABLED=true.')
         booleanParam(name: 'CAP_REQUIRED_ON_LOGIN', defaultValue: true, description: 'Require Cap captcha on the login form.')
         string(name: 'GHCR_OWNER_REPO', defaultValue: '', description: 'Required when PUSH_IMAGES=true, for example ghcr.io/owner/mygram.')
-        booleanParam(name: 'DEPLOY_TO_COOLIFY', defaultValue: false, description: 'Trigger the Coolify deploy webhook after pushing images. Requires Jenkins secret text credential coolify-deploy-webhook-url.')
+        booleanParam(name: 'DEPLOY_TO_COOLIFY', defaultValue: false, description: 'Trigger the Coolify deploy webhook after pushing images. Requires Jenkins secret text credentials coolify-deploy-webhook-url and coolify-token.')
     }
 
     environment {
@@ -205,9 +205,13 @@ pipeline {
             }
             steps {
                 withCredentials([
-                    string(credentialsId: 'coolify-deploy-webhook-url', variable: 'COOLIFY_DEPLOY_WEBHOOK_URL')
+                    string(credentialsId: 'coolify-deploy-webhook-url', variable: 'COOLIFY_DEPLOY_WEBHOOK_URL'),
+                    string(credentialsId: 'coolify-token', variable: 'COOLIFY_TOKEN')
                 ]) {
-                    sh 'curl --fail --silent --show-error --location "$COOLIFY_DEPLOY_WEBHOOK_URL"'
+                    sh '''
+                        curl --fail --show-error --location --request GET "$COOLIFY_DEPLOY_WEBHOOK_URL" \
+                          --header "Authorization: Bearer $COOLIFY_TOKEN"
+                    '''
                 }
             }
         }
@@ -220,7 +224,7 @@ pipeline {
             echo "Mutable production tags: ${env.BACKEND_MAIN_IMAGE ?: 'not pushed'} and ${env.FRONTEND_MAIN_IMAGE ?: 'not pushed'}"
         }
         failure {
-            echo 'Phase E checks failed. Review the failing stage before moving to deploy automation.'
+            echo 'MyGram pipeline failed. Review the failing stage before deploying this revision.'
         }
     }
 }

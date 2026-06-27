@@ -2,6 +2,21 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, beforeAll, vi } from "vitest";
 
+vi.mock("cap-widget", () => {
+  if (!customElements.get("cap-widget")) {
+    customElements.define(
+      "cap-widget",
+      class MockCapWidget extends HTMLElement {
+        reset() {
+          this.dispatchEvent(new CustomEvent("reset", { detail: {} }));
+        }
+      },
+    );
+  }
+
+  return {};
+});
+
 beforeAll(() => {
   Object.defineProperty(window, "matchMedia", {
     writable: true,

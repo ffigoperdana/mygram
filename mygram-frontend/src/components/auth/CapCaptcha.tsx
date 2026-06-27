@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import "cap-widget";
+
+import type { CapErrorEvent, CapSolveEvent, CapWidget } from "cap-widget";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCcw, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -20,8 +23,10 @@ function getCapConfig() {
 
 export function CapCaptcha({ value, onChange }: CapCaptchaProps) {
   const [refreshKey, setRefreshKey] = useState(0);
+  const [error, setError] = useState("");
+  const widgetRef = useRef<CapWidget | null>(null);
   const capConfig = getCapConfig();
-  const widgetUrl = useMemo(() => {
+  const apiEndpoint = useMemo(() => {
     if (!capConfig.enabled || !capConfig.baseUrl || !capConfig.siteKey) {
       return "";
     }
@@ -30,38 +35,43 @@ export function CapCaptcha({ value, onChange }: CapCaptchaProps) {
   }, [capConfig.baseUrl, capConfig.enabled, capConfig.siteKey]);
 
   useEffect(() => {
-    if (!widgetUrl) {
+    const widget = widgetRef.current;
+    if (!apiEndpoint || !widget) {
       return undefined;
     }
 
-    function handleMessage(event: MessageEvent) {
-      const expectedOrigin = new URL(widgetUrl).origin;
-      if (event.origin !== expectedOrigin) {
-        return;
-      }
-
-      const data = event.data as
-        | string
-        | { token?: string; response?: string; solution?: string; type?: string };
-      const token =
-        typeof data === "string"
-          ? data
-          : data.token ?? data.response ?? data.solution ?? "";
-
-      if (token && (!("type" in Object(data)) || String(Object(data).type).includes("cap"))) {
-        onChange(token);
+    function handleSolve(event: CapSolveEvent) {
+      if (event.detail.token) {
+        setError("");
+        onChange(event.detail.token);
       }
     }
 
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [onChange, widgetUrl]);
+    function handleReset() {
+      onChange("");
+    }
+
+    function handleError(event: CapErrorEvent) {
+      setError(event.detail.message || "Captcha verification could not start.");
+      onChange("");
+    }
+
+    widget.addEventListener("solve", handleSolve);
+    widget.addEventListener("reset", handleReset);
+    widget.addEventListener("error", handleError);
+
+    return () => {
+      widget.removeEventListener("solve", handleSolve);
+      widget.removeEventListener("reset", handleReset);
+      widget.removeEventListener("error", handleError);
+    };
+  }, [apiEndpoint, onChange, refreshKey]);
 
   if (!capConfig.enabled) {
     return null;
   }
 
-  if (!widgetUrl) {
+  if (!apiEndpoint) {
     return (
       <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
         Captcha is enabled but frontend Cap configuration is incomplete.
@@ -87,14 +97,17 @@ export function CapCaptcha({ value, onChange }: CapCaptchaProps) {
         </Button>
       </div>
       <div className="overflow-hidden rounded-md border bg-background">
-        <iframe
+        <cap-widget
           key={refreshKey}
-          title="Cap captcha"
-          src={widgetUrl}
-          className="h-24 w-full"
-          sandbox="allow-scripts allow-same-origin allow-forms"
+          ref={(element) => {
+            widgetRef.current = element;
+          }}
+          required
+          data-cap-api-endpoint={apiEndpoint}
+          data-cap-hidden-field-name="captcha_token"
         />
       </div>
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <div className="relative">
         <ShieldCheck
           className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
