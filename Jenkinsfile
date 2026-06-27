@@ -158,8 +158,20 @@ pipeline {
                 }
                 sh 'docker tag "${BACKEND_LOCAL_IMAGE}" "${BACKEND_REMOTE_IMAGE}"'
                 sh 'docker tag "${FRONTEND_LOCAL_IMAGE}" "${FRONTEND_REMOTE_IMAGE}"'
-                sh 'docker push "${BACKEND_REMOTE_IMAGE}"'
-                sh 'docker push "${FRONTEND_REMOTE_IMAGE}"'
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'ghcr',
+                        usernameVariable: 'GHCR_USERNAME',
+                        passwordVariable: 'GHCR_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        printf "%s" "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+                    '''
+                    sh 'docker push "${BACKEND_REMOTE_IMAGE}"'
+                    sh 'docker push "${FRONTEND_REMOTE_IMAGE}"'
+                }
             }
         }
     }
