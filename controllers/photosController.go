@@ -1,14 +1,13 @@
 package controllers
 
 import (
-	"finalproject/database"
+	"errors"
 	"finalproject/helpers"
 	"finalproject/models"
 	"net/http"
-	"strconv"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // CreatePhoto godoc
@@ -17,40 +16,42 @@ import (
 // @Tags photo
 // @Accept json
 // @Produce json
-// @Param title query string true "title"
-// @Param caption query string false "caption"
-// @Param photo_url query string true "photo_url"
+// @Param request body models.Photo true "Photo request body"
 // @Security BearerAuth
 // @Success 201 {object} models.Photo "Create photo success"
-// @Failure 401 "Unauthorized"
+// @Failure 400 {object} ErrorResponse "Invalid request"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /photos/create [post]
+// @Router /api/v1/photos [post]
 func CreatePhoto(c *gin.Context) {
-	db := database.GetDB()
-	userData := c.MustGet("userData").(jwt.MapClaims)
-	contentType := helpers.GetContentType(c)
-
-	Photo := models.Photo{}
-	userID := uint(userData["id"].(float64))
-
-	if contentType == appJson {
-		c.ShouldBindJSON(&Photo)
-	} else {
-		c.ShouldBind(&Photo)
-	}
-
-	Photo.UserID = userID
-
-	err := db.Debug().Create(&Photo).Error
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Bad Request",
-			"message": err.Error(),
-		})
+	db, ok := requireDB(c)
+	if !ok {
 		return
 	}
 
-	c.JSON(http.StatusCreated, Photo)
+	claims, ok := requireClaims(c)
+	if !ok {
+		return
+	}
+
+	photo := models.Photo{}
+	if err := helpers.BindRequest(c, &photo); err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+	if err := helpers.ValidateHTTPURL(photo.PhotoURL); err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	photo.UserID = claims.ID
+	if err := db.Create(&photo).Error; err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusCreated, photo)
 }
 
 // GetAllPhotos godoc
@@ -61,20 +62,20 @@ func CreatePhoto(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} []models.Photo{} "Get all photos success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Photos Not Found"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 500 {object} ErrorResponse "Database error"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /photos/getall [get]
+// @Router /api/v1/photos [get]
 func GetAllPhotos(c *gin.Context) {
-	db := database.GetDB()
+	db, ok := requireDB(c)
+	if !ok {
+		return
+	}
+
 	allPhotos := []models.Photo{}
-
-	db.Find(&allPhotos)
-
-	if len(allPhotos) == 0 {
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-			"error_status":  "No Photos found",
-			"error_message": "There are no photos found.",
-		})
+	if err := db.Find(&allPhotos).Error; err != nil {
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load photos")
 		return
 	}
 
@@ -90,28 +91,37 @@ func GetAllPhotos(c *gin.Context) {
 // @Param photoId path int true "ID of the photo"
 // @Security BearerAuth
 // @Success 200 {object} models.Photo{} "Get photo success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Photo Not Found"
+// @Failure 400 {object} ErrorResponse "Invalid photo id"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 404 {object} ErrorResponse "Photo not found"
+// @Failure 500 {object} ErrorResponse "Database error"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /photos/get/{photoId} [get]
+// @Router /api/v1/photos/{photoId} [get]
 func GetPhoto(c *gin.Context) {
-	db := database.GetDB()
-	Photo := models.Photo{}
-
-	photoId, _ := strconv.Atoi(c.Param("photoId"))
-
-	Photo.ID = uint(photoId)
-
-	err := db.First(&Photo, "id = ?", photoId).Error
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Bad Request",
-			"message": err.Error(),
-		})
+	db, ok := requireDB(c)
+	if !ok {
 		return
 	}
 
-	c.JSON(http.StatusOK, Photo)
+	photoID, err := helpers.ParseUintParam(c, "photoId")
+	if err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid photo id")
+		return
+	}
+
+	photo := models.Photo{}
+	if err := db.First(&photo, photoID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			jsonError(c, http.StatusNotFound, "Photo Not Found", "photo does not exist")
+			return
+		}
+
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load photo")
+		return
+	}
+
+	c.JSON(http.StatusOK, photo)
 }
 
 // UpdatePhoto godoc
@@ -121,40 +131,54 @@ func GetPhoto(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param photoId path int true "ID of the photo"
+// @Param request body models.Photo true "Photo update request body"
 // @Security BearerAuth
 // @Success 200 {object} models.Photo{} "Update photo success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Photo Not Found"
+// @Failure 400 {object} ErrorResponse "Invalid request"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden"
+// @Failure 404 {object} ErrorResponse "Photo not found"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /photos/update/{photoId} [put]
+// @Router /api/v1/photos/{photoId} [put]
 func UpdatePhoto(c *gin.Context) {
-	db := database.GetDB()
-	userData := c.MustGet("userData").(jwt.MapClaims)
-	contentType := helpers.GetContentType(c)
-	Photo := models.Photo{}
-
-	photoId, _ := strconv.Atoi(c.Param("photoId"))
-	userID := uint(userData["id"].(float64))
-
-	if contentType == appJson {
-		c.ShouldBindJSON(&Photo)
-	} else {
-		c.ShouldBind(&Photo)
-	}
-
-	Photo.UserID = userID
-	Photo.ID = uint(photoId)
-
-	err := db.Model(&Photo).Where("id = ?", photoId).Updates(models.Photo{Title: Photo.Title, Caption: Photo.Caption, PhotoURL: Photo.PhotoURL}).Error
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Bad Request",
-			"message": err.Error(),
-		})
+	db, ok := requireDB(c)
+	if !ok {
 		return
 	}
 
-	c.JSON(http.StatusOK, Photo)
+	photoID, err := helpers.ParseUintParam(c, "photoId")
+	if err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid photo id")
+		return
+	}
+
+	photo := models.Photo{}
+	if err := helpers.BindRequest(c, &photo); err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+	if err := helpers.ValidateHTTPURL(photo.PhotoURL); err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	photo.ID = photoID
+	if err := db.Model(&photo).Where("id = ?", photoID).Updates(map[string]interface{}{
+		"title":     photo.Title,
+		"caption":   photo.Caption,
+		"photo_url": photo.PhotoURL,
+	}).Error; err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	if err := db.First(&photo, photoID).Error; err != nil {
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load updated photo")
+		return
+	}
+
+	c.JSON(http.StatusOK, photo)
 }
 
 // DeletePhoto godoc
@@ -165,28 +189,33 @@ func UpdatePhoto(c *gin.Context) {
 // @Produce json
 // @Param photoId path int true "ID of the photo"
 // @Security BearerAuth
-// @Success 200 {string} string "Delete photo success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Photo Not Found"
+// @Success 200 {object} DeleteResponse "Delete photo success"
+// @Failure 400 {object} ErrorResponse "Invalid photo id"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden"
+// @Failure 404 {object} ErrorResponse "Photo not found"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /photos/delete/{photoId} [delete]
+// @Router /api/v1/photos/{photoId} [delete]
 func DeletePhoto(c *gin.Context) {
-	db := database.GetDB()
-	Photo := models.Photo{}
+	db, ok := requireDB(c)
+	if !ok {
+		return
+	}
 
-	photoId, _ := strconv.Atoi(c.Param("photoId"))
-
-	err := db.Where("id = ?", photoId).Delete(&Photo).Error
-
+	photoID, err := helpers.ParseUintParam(c, "photoId")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Delete Error",
-			"message": err.Error(),
-		})
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid photo id")
+		return
+	}
+
+	if err := db.Delete(&models.Photo{}, photoID).Error; err != nil {
+		jsonError(c, http.StatusBadRequest, "Delete Error", err.Error())
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"Status":  "Delete Success",
-		"Message": "The photo has been successfully deleted",
+		"status":  "delete_success",
+		"message": "the photo has been successfully deleted",
 	})
 }

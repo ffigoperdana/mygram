@@ -1,281 +1,181 @@
 # MyGram - Social Media Backend API
 
-A comprehensive social media backend application built with Go (Golang) using the Gin framework. This project is a final project for Hactiv8's Go Programming course, focusing on building secure APIs for a social media platform where users can share photos, comments, and social media links.
+MyGram is a Go/Gin social media backend for users, photos, comments, and social media links. This repository is being prepared for a fullstack app with:
 
-## 👨‍💻 Author Information
+- Backend: Go, Gin, GORM, PostgreSQL
+- Frontend: React, Vite, TypeScript, Tailwind
+- Deployment: Docker Compose on Coolify, with GHCR images and Jenkins pipeline support
 
-**Nama**: Figo Perdana Putra  
-**Kelas**: F-07  
-**Contact**: perdanaputrafigo@gmail.com  
+See [TASK.md](TASK.md) for the phased implementation handoff and [DEPLOYMENT.md](DEPLOYMENT.md) for the Coolify/Jenkins deployment plan.
 
----
+## Current Backend Features
 
-## 🚀 Project Overview
+- User registration and login
+- Password hashing with bcrypt
+- JWT authentication with 24 hour token expiration
+- RBAC with `user` and `admin` roles
+- Optional Cap captcha verification for registration/login
+- Admin dashboard API for stats, user listing, user updates, ban/unban, and delete
+- Photo CRUD with ownership authorization
+- Authenticated image upload to S3-compatible object storage for photo media
+- Comment CRUD with ownership authorization
+- Social media link CRUD with ownership authorization
+- Health, liveness, and readiness endpoints
+- Public OpenAPI spec at `/openapi/public.json`
+- Swagger UI at `/swagger/index.html`, configurable as `internal`, `public`, or `disabled`
+- CORS middleware for frontend integration
+- Env-driven database, JWT, CORS, and port configuration
 
-MyGram is a RESTful API backend for a social media application that allows users to:
-- Register and authenticate accounts
-- Upload and manage photos with captions
-- Comment on photos
-- Share social media links
-- Secure access with JWT authentication
-- Role-based authorization for resource management
+## API Endpoints
 
-## 🏗️ Architecture & Tech Stack
+Legacy endpoints are still available:
 
-### **Core Technologies**
-- **Language**: Go 1.20
-- **Framework**: Gin Web Framework
-- **Database**: PostgreSQL with GORM ORM
-- **Authentication**: JWT (JSON Web Tokens)
-- **Password Security**: bcrypt hashing
-- **Documentation**: Swagger/OpenAPI
-- **Validation**: govalidator
+```text
+POST   /users/register
+POST   /users/login
 
-### **Dependencies**
-```go
-- github.com/gin-gonic/gin - Web framework
-- gorm.io/gorm - ORM for database operations
-- gorm.io/driver/postgres - PostgreSQL driver
-- github.com/dgrijalva/jwt-go - JWT authentication
-- golang.org/x/crypto - Password hashing (bcrypt)
-- github.com/asaskevich/govalidator - Input validation
-- github.com/swaggo/gin-swagger - API documentation
+POST   /photos/create
+GET    /photos/getall
+GET    /photos/get/:photoId
+PUT    /photos/update/:photoId
+DELETE /photos/delete/:photoId
+
+POST   /comments/create/:photoId
+GET    /comments/getall
+GET    /comments/getall/:photoId
+GET    /comments/get/:commentId
+PUT    /comments/update/:commentId
+DELETE /comments/delete/:commentId
+
+POST   /socialmedia/create
+GET    /socialmedia/getall
+GET    /socialmedia/get/:socialMediaId
+PUT    /socialmedia/update/:socialMediaId
+DELETE /socialmedia/delete/:socialMediaId
 ```
 
-## 📊 Database Schema
+Cleaner aliases are also available under `/api/v1`:
 
-The application uses PostgreSQL with the following main entities:
+```text
+POST   /api/v1/auth/register
+POST   /api/v1/auth/login
+GET    /api/v1/me
+PATCH  /api/v1/me
 
-### **User Model**
-```go
-- ID (Primary Key)
-- Username (Unique)
-- Email (Unique) 
-- Password (Hashed with bcrypt)
-- Age (Minimum 9 years old)
-- CreatedAt, UpdatedAt
-- Relationships: Has many Photos, Comments, SocialMedias
+POST   /api/v1/photos
+GET    /api/v1/photos
+GET    /api/v1/photos/:photoId
+PUT    /api/v1/photos/:photoId
+DELETE /api/v1/photos/:photoId
+
+POST   /api/v1/uploads/photos
+
+GET    /api/v1/comments
+GET    /api/v1/comments/:commentId
+PUT    /api/v1/comments/:commentId
+DELETE /api/v1/comments/:commentId
+
+GET    /api/v1/photos/:photoId/comments
+POST   /api/v1/photos/:photoId/comments
+
+POST   /api/v1/social-media
+GET    /api/v1/social-media
+GET    /api/v1/social-media/:socialMediaId
+PUT    /api/v1/social-media/:socialMediaId
+DELETE /api/v1/social-media/:socialMediaId
+
+GET    /api/v1/admin/stats
+GET    /api/v1/admin/users
+GET    /api/v1/admin/users/:userId
+PATCH  /api/v1/admin/users/:userId
+DELETE /api/v1/admin/users/:userId
+POST   /api/v1/admin/users/:userId/ban
+POST   /api/v1/admin/users/:userId/unban
 ```
 
-### **Photo Model**
-```go
-- ID (Primary Key)
-- Title (Required)
-- Caption (Optional)
-- PhotoURL (Required, validated URL)
-- UserID (Foreign Key)
-- CreatedAt, UpdatedAt
-- Relationships: Belongs to User, Has many Comments
+Protected routes require:
+
+```text
+Authorization: Bearer <jwt>
 ```
 
-### **Comment Model**
-```go
-- ID (Primary Key)
-- Message (Required)
-- PhotoID (Foreign Key)
-- UserID (Foreign Key)
-- CreatedAt, UpdatedAt
-- Relationships: Belongs to User and Photo
-```
+## Environment
 
-### **SocialMedia Model**
-```go
-- ID (Primary Key)
-- Name (Required)
-- SocialMediaURL (Required, validated URL)
-- UserID (Foreign Key)
-- CreatedAt, UpdatedAt
-- Relationships: Belongs to User
-```
+Copy `.env.example` to `.env` for local development.
 
-## 🔐 Security Features
+Required backend variables:
 
-### **Authentication & Authorization**
-- **JWT Authentication**: Secure token-based authentication
-- **Password Hashing**: bcrypt for secure password storage
-- **Authorization Middleware**: Resource-specific authorization
-- **Input Validation**: Comprehensive validation on all inputs
-
-### **Middleware Stack**
-1. **Authentication Middleware**: Validates JWT tokens
-2. **Authorization Middleware**: Ensures users can only modify their own resources
-3. **Content-Type Handling**: Supports JSON and form data
-
-## 🛠️ API Endpoints
-
-### **User Management**
-```
-POST /users/register  - Register new user
-POST /users/login     - User authentication
-```
-
-### **Photo Management** (🔒 Requires Authentication)
-```
-POST   /photos/create           - Upload new photo
-GET    /photos/getall           - Get all photos
-GET    /photos/get/:photoId     - Get specific photo
-PUT    /photos/update/:photoId  - Update photo (owner only)
-DELETE /photos/delete/:photoId  - Delete photo (owner only)
-```
-
-### **Comment Management** (🔒 Requires Authentication)
-```
-POST   /comments/create/:photoId       - Add comment to photo
-GET    /comments/getall               - Get all comments
-GET    /comments/getall/:photoId      - Get comments for specific photo
-GET    /comments/get/:commentId       - Get specific comment
-PUT    /comments/update/:commentId    - Update comment (owner only)
-DELETE /comments/delete/:commentId    - Delete comment (owner only)
-```
-
-### **Social Media Management** (🔒 Requires Authentication)
-```
-POST   /socialmedia/create                    - Add social media link
-GET    /socialmedia/getall                    - Get all social media links
-GET    /socialmedia/get/:socialMediaId        - Get specific social media
-PUT    /socialmedia/update/:socialMediaId     - Update social media (owner only)
-DELETE /socialmedia/delete/:socialMediaId     - Delete social media (owner only)
-```
-
-### **Documentation**
-```
-GET /swagger/*any - Swagger API documentation
-```
-
-## 🔄 Application Workflow
-
-### **1. User Registration & Authentication**
-```
-User Registration → Password Hashing → Database Storage
-User Login → Password Verification → JWT Token Generation
-```
-
-### **2. Photo Sharing Flow**
-```
-Authentication Check → Photo Upload → Validation → Database Storage
-Photo Retrieval → Authorization Check → Response
-Photo Update/Delete → Owner Authorization → Database Operation
-```
-
-### **3. Comment System Flow**
-```
-Authentication → Photo Existence Check → Comment Creation
-Comment Retrieval → Database Query → Response
-Comment Modification → Owner Authorization → Database Update
-```
-
-### **4. Social Media Integration Flow**
-```
-Authentication → URL Validation → Social Media Link Storage
-Link Management → Owner Authorization → CRUD Operations
-```
-
-## 📁 Project Structure
-
-```
-go-dts-chapter3/
-├── main.go                    # Application entry point
-├── go.mod                     # Go module dependencies
-├── controllers/               # HTTP request handlers
-│   ├── userController.go      # User registration/login
-│   ├── photosController.go    # Photo CRUD operations
-│   ├── commentsController.go  # Comment CRUD operations
-│   └── sosmedController.go    # Social media CRUD operations
-├── database/
-│   └── db.go                  # Database connection & migration
-├── models/                    # Database models
-│   ├── user.go               # User model with validation
-│   ├── photos.go             # Photo model with validation
-│   ├── comments.go           # Comment model with validation
-│   ├── socialMedia.go        # Social media model
-│   └── gormModel.go          # Base GORM model
-├── middlewares/               # HTTP middlewares
-│   ├── authentication.go     # JWT authentication
-│   └── authorization.go      # Resource authorization
-├── helpers/                   # Utility functions
-│   ├── jwt.go                # JWT token operations
-│   ├── bcrypt.go             # Password hashing
-│   └── headerValue.go        # HTTP header utilities
-├── router/
-│   └── router.go             # Route definitions
-└── docs/                     # Swagger documentation
-    ├── docs.go
-    ├── swagger.json
-    └── swagger.yaml
-```
-
-## ⚙️ Setup & Installation
-
-### **Prerequisites**
-- Go 1.20 or higher
-- PostgreSQL database
-- Git
-
-### **Installation Steps**
-
-1. **Clone Repository**
 ```bash
-git clone <repository-url>
-cd go-dts-chapter3
+PORT=8080
+GIN_MODE=debug
+JWT_SECRET=replace-with-a-random-32-plus-character-secret
+JWT_EXPIRATION_HOURS=24
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+PUBLIC_OPENAPI_ENABLED=true
+SWAGGER_UI_MODE=internal
+
+CAP_ENABLED=false
+CAP_BASE_URL=https://cap.fgdev.tech
+CAP_SITE_KEY=replace-with-cap-site-key
+CAP_SECRET_KEY=replace-with-cap-secret-key
+CAP_REQUIRED_ON_LOGIN=true
+
+S3_ENDPOINT=https://s3.fgdev.tech
+S3_REGION=garage
+S3_BUCKET=fgdev-media
+S3_ACCESS_KEY_ID=replace-with-garage-access-key
+S3_SECRET_ACCESS_KEY=replace-with-garage-secret-key
+S3_FORCE_PATH_STYLE=true
+S3_PUBLIC_BASE_URL=
+S3_UPLOAD_MAX_MB=5
+
+DB_HOST=localhost
+DB_USER=postgres
+DB_PASSWORD=admin
+DB_NAME=finalproject
+DB_PORT=5432
+DB_SSLMODE=disable
 ```
 
-2. **Install Dependencies**
+## Local Development Without Docker
+
 ```bash
 go mod download
-```
-
-3. **Database Setup**
-```sql
--- Create PostgreSQL database
-CREATE DATABASE finalproject;
-```
-
-4. **Configure Database** (in `database/db.go`)
-```go
-host     = "localhost"
-user     = "postgres" 
-password = "admin"
-dbname   = "finalproject"
-```
-
-5. **Run Application**
-```bash
+go test ./...
 go run main.go
 ```
 
-The server will start on `http://localhost:8080`
+The backend starts on `http://localhost:8080` by default.
 
-### **API Documentation**
-Access Swagger documentation at: `http://localhost:8080/swagger/index.html`
+In another terminal:
 
-## 🔧 Development Features
+```bash
+cd mygram-frontend
+npm ci
+npm run dev
+```
 
-- **Auto Migration**: Automatic database schema creation
-- **Debug Mode**: Detailed SQL logging in development
-- **Input Validation**: Comprehensive validation on all inputs
-- **Error Handling**: Proper HTTP status codes and error messages
-- **CORS Support**: Cross-origin resource sharing
-- **Swagger Documentation**: Interactive API documentation
+The frontend dev server starts on `http://localhost:3000` by default. Use Laragon/PostgreSQL locally and keep your local `.env` out of git.
 
-## 🎯 Key Learning Objectives
+## Optional Local Fullstack Docker
 
-This project demonstrates:
-- **RESTful API Design**: Proper HTTP methods and status codes
-- **Database Relationships**: Complex entity relationships with GORM
-- **Authentication & Authorization**: JWT-based security
-- **Input Validation**: Data integrity and security
-- **Error Handling**: Robust error management
-- **Documentation**: API documentation with Swagger
-- **Go Best Practices**: Clean code architecture and patterns
+Local Docker is optional. The preferred Docker verification path is GitHub Actions and Jenkins before Coolify deployment.
 
-## 🚦 Testing
+```bash
+docker compose -f docker-compose.fullstack.yml --env-file .env up --build
+```
 
-Use tools like Postman or curl to test the API endpoints. Remember to:
-1. Register a user account
-2. Login to get JWT token
-3. Include Authorization header: `Bearer <your-jwt-token>`
-4. Test CRUD operations for photos, comments, and social media
+The active production compose file is `docker-compose.prod.yml`. Older Redis/test compose files were removed so there is only one optional local fullstack compose and one Coolify production compose.
 
----
+Expected local URLs:
 
-**Note**: This is an educational project for learning Go backend development with security best practices.
+- Frontend: `http://localhost:3000`
+- API: `http://localhost:8080`
+- Public OpenAPI: `http://localhost:8080/openapi/public.json`
+- Swagger: `http://localhost:8080/swagger/index.html`
+
+`SWAGGER_UI_MODE=internal` shows the full developer Swagger UI. `SWAGGER_UI_MODE=public` shows only public user-facing endpoints. `SWAGGER_UI_MODE=disabled` removes the Swagger UI route while keeping `/openapi/public.json` if `PUBLIC_OPENAPI_ENABLED=true`.
+
+## Test Database
+
+The API tests expect a PostgreSQL database named `finalproject_test` using the env values from `main_test.go`. If the database is unavailable, DB-backed tests skip instead of touching the development database.

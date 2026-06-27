@@ -2,50 +2,99 @@ package helpers
 
 import (
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"finalproject/config"
+
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
-var secretKey = "rahasia"
+const UserDataKey = "userData"
 
-func GenerateToken(id uint, username string, email string) string {
-	claims := jwt.MapClaims{
-		"id":       id,
-		"username": username,
-		"email":    email,
-	}
-
-	parseToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	signedToken, _ := parseToken.SignedString([]byte(secretKey))
-
-	return signedToken
+type Claims struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`
+	jwt.RegisteredClaims
 }
 
-func VerifyToken(c *gin.Context) (interface{}, error) {
-	errResponse := errors.New("sign in to proceed")
+func GenerateToken(id uint, username string, email string, role string) (string, error) {
+	cfg := config.Load()
+	return GenerateTokenWithDuration(id, username, email, role, time.Duration(cfg.JWTExpirationHours)*time.Hour)
+}
+
+func GenerateTokenWithDuration(id uint, username string, email string, role string, ttl time.Duration) (string, error) {
+	cfg := config.Load()
+	if strings.TrimSpace(cfg.JWTSecret) == "" {
+		return "", errors.New("jwt secret is not configured")
+	}
+
+	now := time.Now().UTC()
+	claims := Claims{
+		ID:       id,
+		Username: username,
+		Email:    email,
+		Role:     role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+			IssuedAt:  jwt.NewNumericDate(now),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(cfg.JWTSecret))
+}
+
+func VerifyToken(c *gin.Context) (*Claims, error) {
 	headerToken := c.Request.Header.Get("Authorization")
-	bearer := strings.HasPrefix(headerToken, "Bearer")
-
-	if !bearer {
-		return nil, errResponse
+	fields := strings.Fields(headerToken)
+	if len(fields) != 2 || !strings.EqualFold(fields[0], "Bearer") {
+		return nil, errors.New("sign in to proceed")
 	}
 
-	stringToken := strings.Split(headerToken, " ")[1]
+	return VerifyTokenString(fields[1])
+}
 
-	token, _ := jwt.Parse(stringToken, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errResponse
-		}
-		return []byte(secretKey), nil
-	})
-
-	if _, ok := token.Claims.(jwt.MapClaims); !ok && !token.Valid {
-		return nil, errResponse
+func VerifyTokenString(tokenString string) (*Claims, error) {
+	cfg := config.Load()
+	if strings.TrimSpace(cfg.JWTSecret) == "" {
+		return nil, errors.New("jwt secret is not configured")
 	}
 
-	return token.Claims.(jwt.MapClaims), nil
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		claims,
+		func(token *jwt.Token) (interface{}, error) {
+			if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+				return nil, fmt.Errorf("unexpected signing method: %s", token.Header["alg"])
+			}
 
+			return []byte(cfg.JWTSecret), nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
+	if err != nil {
+		return nil, errors.New("invalid or expired token")
+	}
+
+	if !token.Valid || claims.ID == 0 {
+		return nil, errors.New("invalid or expired token")
+	}
+
+	return claims, nil
+}
+
+func GetUserClaims(c *gin.Context) (*Claims, bool) {
+	value, exists := c.Get(UserDataKey)
+	if !exists {
+		return nil, false
+	}
+
+	claims, ok := value.(*Claims)
+	return claims, ok
 }

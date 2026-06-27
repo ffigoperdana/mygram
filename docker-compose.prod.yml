@@ -1,99 +1,82 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  # PostgreSQL Database - Production
   postgres:
     image: postgres:15-alpine
-    container_name: mygram-postgres-prod
     environment:
+      POSTGRES_DB: ${DB_NAME:-finalproject}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME:-finalproject}
-    ports:
-      - "${DB_PORT:-5432}:5432"
     volumes:
-      - postgres_prod_data:/var/lib/postgresql/data
-      - ./backup:/backup
-    networks:
-      - mygram-prod-network
-    restart: always
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-finalproject}"]
       interval: 30s
       timeout: 10s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      retries: 5
+    networks:
+      - mygram
+    restart: unless-stopped
 
-  # Go Application - Production
-  app:
-    image: ${DOCKER_REGISTRY}/mygram:${IMAGE_TAG:-latest}
-    container_name: mygram-app-prod
-    ports:
-      - "${PORT:-8080}:8080"
+  api:
+    image: ${BACKEND_IMAGE}
     environment:
-      - PORT=${PORT:-8080}
-      - DB_HOST=postgres
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME:-finalproject}
-      - DB_PORT=5432
-      - GIN_MODE=release
-      - JWT_SECRET=${JWT_SECRET}
+      PORT: 8080
+      GIN_MODE: release
+      DB_HOST: postgres
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-finalproject}
+      DB_PORT: 5432
+      DB_SSLMODE: disable
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      PUBLIC_OPENAPI_ENABLED: ${PUBLIC_OPENAPI_ENABLED:-true}
+      SWAGGER_UI_MODE: ${SWAGGER_UI_MODE:-public}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION:-garage}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
+      S3_UPLOAD_MAX_MB: ${S3_UPLOAD_MAX_MB:-5}
+    expose:
+      - "8080"
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - mygram-prod-network
-    restart: always
     healthcheck:
       test: ["CMD", "/mygram", "health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-
-  # Nginx Reverse Proxy (optional)
-  nginx:
-    image: nginx:alpine
-    container_name: mygram-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - app
+      start_period: 30s
     networks:
-      - mygram-prod-network
-    restart: always
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      - mygram
+    restart: unless-stopped
+
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    expose:
+      - "80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mygram
+    restart: unless-stopped
 
 volumes:
-  postgres_prod_data:
-    driver: local
+  postgres_data:
 
 networks:
-  mygram-prod-network:
+  mygram:
     driver: bridge

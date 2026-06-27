@@ -51,6 +51,7 @@ build/
 
 # Node modules (if any)
 node_modules/
+mygram-frontend/
 
 # Docker files (don't need these in the build context)
 Dockerfile*

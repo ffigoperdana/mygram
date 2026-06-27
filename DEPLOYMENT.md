@@ -1,301 +1,251 @@
-# 🚀 Deployment Guide for MyGram API
+# MyGram Deployment Plan
 
-This guide covers the complete deployment process using Docker, GitHub Actions, Jenkins, and Coolify.
+This plan targets a homelab Coolify deployment with Jenkins as the main deployment runner and GHCR as the container registry.
 
-## 📋 Prerequisites
+## Recommended Architecture
 
-### Required Services
-- ✅ **GitHub Repository** - Source code hosting
-- ✅ **Docker Hub/GHCR** - Container registry
-- ✅ **Jenkins** (jenkins.egodev.tech) - CI/CD pipeline
-- ✅ **Coolify** - Deployment platform
-- ✅ **VPS/Server** - Hosting environment
+Use one Docker Compose stack in Coolify for the first production version:
 
-### Required Accounts & Access
-- GitHub account with repository access
-- Docker registry account (GitHub Container Registry recommended)
-- Jenkins admin access
-- Coolify admin access
-- VPS/server with Docker installed
+- `frontend`: React static build served by Nginx.
+- `api`: Go Gin backend.
+- `postgres`: persistent PostgreSQL database.
 
-## 🏗️ Deployment Architecture
+This is the best fit for a small fullstack MyGram app on a homelab. Split services later only if you need independent scaling, separate databases, or more strict network boundaries.
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│                 │    │                  │    │                 │
-│  GitHub Actions │───▶│  Jenkins Pipeline │───▶│  Coolify Deploy │
-│                 │    │                  │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                        │                       │
-         │                        │                       │
-         ▼                        ▼                       ▼
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│                 │    │                  │    │                 │
-│  Docker Registry│    │  Testing & QA    │    │  Production VPS │
-│  (GHCR)         │    │  Environment     │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-```
+## Files Created Or Updated
 
-## 🔧 Step-by-Step Setup
+- `.env.example`: documented local and production variables.
+- `.env`: local-only development values, ignored by git.
+- `docker-compose.fullstack.yml`: local fullstack build from source.
+- `docker-compose.prod.yml`: production stack using GHCR images.
+- `coolify.yml`: metadata pointing at the production compose file.
+- `mygram-frontend/Dockerfile`: builds and serves React with Nginx.
+- `mygram-frontend/nginx.conf`: SPA routing support.
 
-### Step 1: GitHub Repository Setup
+## Domains
 
-1. **Push your code to GitHub**:
-   ```bash
-   git add .
-   git commit -m "Add CI/CD configuration"
-   git push origin final-project
-   ```
+Use three domains/subdomains:
 
-2. **Set up GitHub Secrets** (Repository Settings → Secrets and variables → Actions):
-   ```
-   JENKINS_API_TOKEN=your_jenkins_api_token
-   JENKINS_URL=https://jenkins.egodev.tech
-   COOLIFY_API_TOKEN=your_coolify_api_token
-   COOLIFY_URL=your_coolify_instance_url
-   ```
+- Frontend: `https://mygram.example.com`
+- API: `https://api.mygram.example.com`
+- API docs: `https://docs.mygram.example.com`
 
-### Step 2: Docker Registry Configuration
-
-1. **Enable GitHub Container Registry**:
-   - Go to your GitHub repository
-   - Settings → Developer settings → Personal access tokens
-   - Create token with `write:packages` permission
-
-2. **Test Docker build locally**:
-   ```bash
-   docker build -t mygram:test .
-   docker run -p 8080:8080 mygram:test
-   ```
-
-### Step 3: Jenkins Pipeline Setup
-
-1. **Access Jenkins** at `jenkins.egodev.tech`
-
-2. **Create New Pipeline**:
-   - New Item → Pipeline
-   - Name: `mygram-deployment`
-   - Pipeline script from SCM → Git
-   - Repository URL: `https://github.com/ffigoperdana/go-dts-chapter3.git`
-   - Script Path: `Jenkinsfile`
-
-3. **Configure Jenkins Credentials**:
-   ```
-   COOLIFY_API_TOKEN - Secret text
-   COOLIFY_URL - String parameter
-   DOCKER_REGISTRY_CREDENTIALS - Username/Password
-   ```
-
-4. **Install Required Jenkins Plugins**:
-   - Docker Pipeline
-   - HTTP Request
-   - Build Timeout
-   - AnsiColor
-
-### Step 4: Coolify Application Setup
-
-1. **Create New Application** in Coolify:
-   - Name: `mygram-api`
-   - Source: Docker Image
-   - Registry: `ghcr.io/ffigoperdana/go-dts-chapter3`
-
-2. **Configure Environment Variables**:
-   ```env
-   PORT=8080
-   GIN_MODE=release
-   DB_HOST=postgres
-   DB_USER=postgres
-   DB_PASSWORD=your_secure_password
-   DB_NAME=finalproject
-   JWT_SECRET=your_super_secure_jwt_secret
-   ```
-
-3. **Set up Database**:
-   - Add PostgreSQL service
-   - Database name: `finalproject`
-   - User: `postgres`
-
-4. **Configure Health Checks**:
-   - Health Check URL: `/health`
-   - Port: `8080`
-
-### Step 5: Domain & SSL Configuration
-
-1. **Configure Domain** in Coolify:
-   - Add your domain: `api.yourdomain.com`
-   - Enable SSL/TLS
-   - Configure reverse proxy
-
-2. **DNS Configuration**:
-   ```
-   A Record: api.yourdomain.com → Your VPS IP
-   ```
-
-## 🔄 Deployment Workflow
-
-### Automatic Deployment Process
-
-1. **Developer pushes code** to `final-project` or `main` branch
-2. **GitHub Actions triggers**:
-   - Runs tests
-   - Builds Docker image
-   - Pushes to registry
-   - Triggers Jenkins
-3. **Jenkins Pipeline executes**:
-   - Pulls latest image
-   - Runs integration tests
-   - Performs security scans
-   - Deploys via Coolify API
-4. **Coolify handles deployment**:
-   - Pulls new image
-   - Updates containers
-   - Runs health checks
-   - Routes traffic
-
-### Manual Deployment
+In production, set:
 
 ```bash
-# Build and push manually
-docker build -t ghcr.io/ffigoperdana/go-dts-chapter3:manual .
-docker push ghcr.io/ffigoperdana/go-dts-chapter3:manual
-
-# Trigger Jenkins deployment
-curl -X POST \
-  -H "Authorization: Bearer YOUR_JENKINS_TOKEN" \
-  "https://jenkins.egodev.tech/job/mygram-deployment/buildWithParameters?IMAGE_TAG=manual"
+CORS_ALLOWED_ORIGINS=https://mygram.example.com,https://docs.mygram.example.com
+PUBLIC_API_BASE_URL=https://api.mygram.example.com
+PUBLIC_DOCS_BASE_URL=https://docs.mygram.example.com
+PUBLIC_OPENAPI_ENABLED=true
+SWAGGER_UI_MODE=public
 ```
 
-## 🧪 Testing Strategy
+Replace the examples with your real Coolify domains.
 
-### Local Testing
+The docs domain should show human-readable user API docs at `/`. If `/swagger` is opened on the docs domain, show Swagger UI backed by `/openapi/public.json`. Do not expose admin endpoints in public Swagger; keep the full/internal OpenAPI available only to trusted developers or behind admin/internal access.
+
+## Required Secrets
+
+Set these in Jenkins and/or Coolify. Do not commit them.
+
 ```bash
-# Unit tests
+DB_PASSWORD=<strong-postgres-password>
+JWT_SECRET=<random-32-plus-character-secret>
+BACKEND_IMAGE=ghcr.io/<owner>/<repo>-api:<sha-or-tag>
+FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:<sha-or-tag>
+CORS_ALLOWED_ORIGINS=https://mygram.example.com
+PUBLIC_OPENAPI_ENABLED=true
+SWAGGER_UI_MODE=public
+CAP_ENABLED=true
+CAP_BASE_URL=https://cap.fgdev.tech
+CAP_SITE_KEY=<cap-site-key>
+CAP_SECRET_KEY=<cap-secret-key>
+CAP_REQUIRED_ON_LOGIN=true
+S3_ENDPOINT=https://s3.fgdev.tech
+S3_REGION=garage
+S3_BUCKET=fgdev-media
+S3_ACCESS_KEY_ID=<garage-access-key>
+S3_SECRET_ACCESS_KEY=<garage-secret-key>
+S3_FORCE_PATH_STYLE=true
+S3_PUBLIC_BASE_URL=
+S3_UPLOAD_MAX_MB=5
+```
+
+For Jenkins:
+
+```bash
+GHCR_USERNAME=<github-username-or-org>
+GHCR_TOKEN=<github-token-with-package-write>
+COOLIFY_WEBHOOK_URL=<coolify-deploy-webhook>
+```
+
+## Optional Local Fullstack Docker Test
+
+Local Docker testing is optional. For daily local work, run PostgreSQL through Laragon, start the backend with Go, and start the frontend with Vite. Use GitHub Actions/Jenkins as the preferred Docker build verification path.
+
+```bash
+docker compose -f docker-compose.fullstack.yml --env-file .env up --build
+```
+
+Expected local URLs:
+
+- Frontend: `http://localhost:3000`
+- API: `http://localhost:8080`
+- Health: `http://localhost:8080/health`
+- Swagger: `http://localhost:8080/swagger/index.html`
+- Public OpenAPI: `http://localhost:8080/openapi/public.json`
+- Docs: `http://localhost:3000/docs` during frontend development, then `https://docs.mygram.example.com` in production.
+
+## Jenkins Pipeline Shape
+
+Use Jenkins for deployment because it already lives in your homelab and can be connected to Coolify cleanly.
+
+Pipeline stages:
+
+1. Checkout repository from GitHub webhook.
+2. Run backend checks:
+
+```bash
+go mod download
 go test ./...
-
-# Integration tests with Docker
-docker-compose -f docker-compose.test.yml up -d
-go test ./tests/integration/...
-docker-compose -f docker-compose.test.yml down
+go vet ./...
 ```
 
-### Staging Environment Testing
-- Automatic deployment to staging on `develop` branch
-- Integration tests run in Jenkins
-- Manual QA testing environment
+3. Run frontend checks:
 
-### Production Testing
-- Smoke tests after deployment
-- Health check monitoring
-- Performance testing (optional)
+```bash
+cd mygram-frontend
+npm ci
+npm run lint
+npm run typecheck
+npm run build
+```
 
-## 📊 Monitoring & Observability
+4. Build and push images:
 
-### Health Endpoints
-- `GET /health` - Basic health check
-- `GET /health/ready` - Readiness check (includes DB)
-- `GET /health/live` - Liveness check
+```bash
+docker build -t ghcr.io/<owner>/<repo>-api:${GIT_COMMIT} .
+docker build \
+  --build-arg VITE_API_BASE_URL=https://api.mygram.example.com \
+  -t ghcr.io/<owner>/<repo>-web:${GIT_COMMIT} \
+  ./mygram-frontend
 
-### Logs & Metrics
-- Application logs via Docker
-- Coolify monitoring dashboard
-- Jenkins build logs
-- GitHub Actions logs
+docker push ghcr.io/<owner>/<repo>-api:${GIT_COMMIT}
+docker push ghcr.io/<owner>/<repo>-web:${GIT_COMMIT}
+```
 
-## 🔒 Security Considerations
+5. Update Coolify environment variables:
 
-### Secrets Management
-- Use environment variables for sensitive data
-- Store secrets in GitHub Secrets
-- Use Jenkins credential store
-- Coolify environment variable encryption
+```bash
+BACKEND_IMAGE=ghcr.io/<owner>/<repo>-api:${GIT_COMMIT}
+FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:${GIT_COMMIT}
+```
 
-### Container Security
-- Non-root user in Docker
-- Minimal base image (scratch)
-- Security scanning in CI/CD
-- Regular dependency updates
+6. Trigger Coolify redeploy using its webhook/API.
 
-## 🚨 Troubleshooting
+For Phase E build verification, leave `PUSH_IMAGES=false` in Jenkins. That mode runs backend checks, frontend checks, backend Docker build, frontend Docker build, and production compose config validation without pushing images or deploying. Turn image push/deploy behavior on later during Phase F.
 
-### Common Issues
+## GitHub Actions Role
 
-1. **Build Failures**:
-   ```bash
-   # Check go.mod dependencies
-   go mod tidy
-   go mod verify
-   
-   # Test Docker build
-   docker build --no-cache -t test .
-   ```
+Keep GitHub Actions smaller than Jenkins:
 
-2. **Database Connection Issues**:
-   ```bash
-   # Test database connectivity
-   docker-compose up postgres
-   # Check connection string in environment variables
-   ```
+- Run on pull requests.
+- Run Go tests and frontend build.
+- Build-check backend and frontend Dockerfiles with `push: false`.
+- Validate `docker-compose.prod.yml` and optional `docker-compose.fullstack.yml` config with dummy CI env values.
+- Optionally run Playwright smoke tests after backend/frontend are stable.
+- Do not deploy from GitHub Actions if Jenkins is the chosen deployment owner.
 
-3. **Health Check Failures**:
-   ```bash
-   # Test health endpoints
-   curl http://localhost:8080/health
-   curl http://localhost:8080/health/ready
-   ```
+This avoids two systems racing to deploy the same app.
 
-4. **Deployment Failures**:
-   - Check Jenkins logs
-   - Verify Coolify configuration
-   - Check environment variables
-   - Verify database migration status
+## Coolify Setup Steps
 
-### Rollback Procedure
+1. Create a new Coolify project named `mygram-fullstack`.
+2. Create an application from the GitHub repository.
+3. Select Docker Compose deployment.
+4. Use `docker-compose.prod.yml`.
+5. Configure environment variables:
 
-1. **Automatic Rollback** (in Jenkins):
-   - Failed health checks trigger rollback
-   - Previous working image restored
+```bash
+DB_NAME=finalproject
+DB_USER=postgres
+DB_PASSWORD=<strong-postgres-password>
+JWT_SECRET=<random-32-plus-character-secret>
+JWT_EXPIRATION_HOURS=24
+CORS_ALLOWED_ORIGINS=https://mygram.example.com
+PUBLIC_OPENAPI_ENABLED=true
+SWAGGER_UI_MODE=public
+CAP_ENABLED=true
+CAP_BASE_URL=https://cap.fgdev.tech
+CAP_SITE_KEY=<cap-site-key>
+CAP_SECRET_KEY=<cap-secret-key>
+CAP_REQUIRED_ON_LOGIN=true
+S3_ENDPOINT=https://s3.fgdev.tech
+S3_REGION=garage
+S3_BUCKET=fgdev-media
+S3_ACCESS_KEY_ID=<garage-access-key>
+S3_SECRET_ACCESS_KEY=<garage-secret-key>
+S3_FORCE_PATH_STYLE=true
+S3_PUBLIC_BASE_URL=
+S3_UPLOAD_MAX_MB=5
+BACKEND_IMAGE=ghcr.io/<owner>/<repo>-api:<tag>
+FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:<tag>
+```
 
-2. **Manual Rollback**:
-   ```bash
-   # Deploy previous version
-   curl -X POST \
-     -H "Authorization: Bearer YOUR_JENKINS_TOKEN" \
-     "https://jenkins.egodev.tech/job/mygram-deployment/buildWithParameters?IMAGE_TAG=previous_working_tag"
-   ```
+6. Add domains:
 
-## 📈 Performance & Scaling
+- `frontend` service on port `80`: `https://mygram.example.com`
+- `api` service on port `8080`: `https://api.mygram.example.com`
+- `docs` frontend route/service on port `80`: `https://docs.mygram.example.com`
 
-### Resource Requirements
-- **Minimum**: 512MB RAM, 1 CPU core
-- **Recommended**: 1GB RAM, 2 CPU cores
-- **Database**: 1GB RAM, 20GB storage
+7. Enable HTTPS through Coolify.
+8. Enable persistent volume for Postgres.
+9. Enable automated Postgres backups.
+10. Deploy.
 
-### Scaling Options
-- Horizontal scaling via Coolify
-- Load balancing configuration
-- Database read replicas
-- Caching with Redis
+## Production Verification
 
-## 🎯 Portfolio Benefits
+Check these after each deployment:
 
-This deployment setup demonstrates:
-- **DevOps Expertise**: Complete CI/CD pipeline
-- **Cloud Architecture**: Modern deployment patterns
-- **Security Best Practices**: Secrets management, scanning
-- **Monitoring & Observability**: Health checks, logging
-- **Scalability**: Container orchestration
-- **Professional Workflow**: Code quality, testing, deployment automation
+```bash
+curl https://api.mygram.example.com/health
+curl https://api.mygram.example.com/health/live
+curl https://api.mygram.example.com/health/ready
+```
 
-## 📝 Next Steps
+Then verify in browser:
 
-1. **Set up monitoring alerts**
-2. **Implement automated backups**
-3. **Add performance monitoring**
-4. **Set up log aggregation**
-5. **Implement blue-green deployments**
-6. **Add API rate limiting**
-7. **Set up SSL certificate auto-renewal**
+- Frontend loads over HTTPS.
+- Docs domain loads over HTTPS.
+- `/swagger` on the docs domain shows only public user API endpoints.
+- `/openapi/public.json` does not include `/api/v1/admin/*` or legacy course-project routes.
+- Register works.
+- Login returns and stores a token.
+- Upload image and create photo works.
+- Comments work.
+- Social links work.
+- Admin dashboard is visible only to admin users.
+- PWA install prompt appears once after eligibility and does not repeat on every route change or revisit.
+- Logout works.
+- Refreshing a protected page keeps auth state if token is valid.
 
----
+## Rollback
 
-**🚀 Your Go social media API is now ready for professional deployment!**
+Keep image tags by git SHA. To rollback:
+
+1. Find the previous good backend and frontend image SHAs in GHCR.
+2. Change `BACKEND_IMAGE` and `FRONTEND_IMAGE` in Coolify to those tags.
+3. Redeploy the Compose stack.
+4. Verify health and core workflows.
+
+## Notes For Backend Completion
+
+Deployment should wait until these backend tasks are done:
+
+- `database.StartDB()` is called from `main.go`.
+- DB config comes from env variables.
+- JWT secret comes from env variables.
+- JWT expires after 24 hours.
+- CORS is enabled.
+- `/health/ready` does not panic when DB is unavailable.
+- API tests pass against a test database.

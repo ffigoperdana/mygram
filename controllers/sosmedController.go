@@ -1,14 +1,13 @@
 package controllers
 
 import (
-	"finalproject/database"
+	"errors"
 	"finalproject/helpers"
 	"finalproject/models"
 	"net/http"
-	"strconv"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // CreateSocialMedia godoc
@@ -17,39 +16,42 @@ import (
 // @Tags social media
 // @Accept json
 // @Produce json
-// @Param name query string true "name"
-// @Param social_media_url query string true "social_media_url"
+// @Param request body models.SocialMedia true "Social media request body"
 // @Security BearerAuth
 // @Success 201 {object} models.SocialMedia "Create social media success"
-// @Failure 401 "Unauthorized"
+// @Failure 400 {object} ErrorResponse "Invalid request"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /socialmedia/create [post]
+// @Router /api/v1/social-media [post]
 func CreateSocialMedia(c *gin.Context) {
-	db := database.GetDB()
-	userData := c.MustGet("userData").(jwt.MapClaims)
-	contentType := helpers.GetContentType(c)
-
-	SocialMedia := models.SocialMedia{}
-	userID := uint(userData["id"].(float64))
-
-	if contentType == appJson {
-		c.ShouldBindJSON(&SocialMedia)
-	} else {
-		c.ShouldBind(&SocialMedia)
-	}
-
-	SocialMedia.UserID = userID
-
-	err := db.Debug().Create(&SocialMedia).Error
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Bad Request",
-			"message": err.Error(),
-		})
+	db, ok := requireDB(c)
+	if !ok {
 		return
 	}
 
-	c.JSON(http.StatusCreated, SocialMedia)
+	claims, ok := requireClaims(c)
+	if !ok {
+		return
+	}
+
+	socialMedia := models.SocialMedia{}
+	if err := helpers.BindRequest(c, &socialMedia); err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+	if err := helpers.ValidateHTTPURL(socialMedia.SocialMediaURL); err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	socialMedia.UserID = claims.ID
+	if err := db.Create(&socialMedia).Error; err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusCreated, socialMedia)
 }
 
 // GetAllSocialMedia godoc
@@ -60,20 +62,20 @@ func CreateSocialMedia(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} []models.SocialMedia "Get all social media success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Social Media Not Found"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 500 {object} ErrorResponse "Database error"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /socialmedia/getall [get]
+// @Router /api/v1/social-media [get]
 func GetAllSocialMedias(c *gin.Context) {
-	db := database.GetDB()
+	db, ok := requireDB(c)
+	if !ok {
+		return
+	}
+
 	allSocialMedias := []models.SocialMedia{}
-
-	db.Find(&allSocialMedias)
-
-	if len(allSocialMedias) == 0 {
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-			"error_status":  "No social media found",
-			"error_message": "There are no social media found.",
-		})
+	if err := db.Find(&allSocialMedias).Error; err != nil {
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load social media links")
 		return
 	}
 
@@ -89,28 +91,37 @@ func GetAllSocialMedias(c *gin.Context) {
 // @Param socialMediaId path int true "ID of the social media"
 // @Security BearerAuth
 // @Success 200 {object} models.SocialMedia "Get social media success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Social Media Not Found"
+// @Failure 400 {object} ErrorResponse "Invalid social media id"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 404 {object} ErrorResponse "Social media not found"
+// @Failure 500 {object} ErrorResponse "Database error"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /socialmedia/get/{socialMediaId} [get]
+// @Router /api/v1/social-media/{socialMediaId} [get]
 func GetSocialMedia(c *gin.Context) {
-	db := database.GetDB()
-	SocialMedia := models.SocialMedia{}
-
-	socialMediaId, _ := strconv.Atoi(c.Param("socialMediaId"))
-
-	SocialMedia.ID = uint(socialMediaId)
-
-	err := db.First(&SocialMedia, "id = ?", socialMediaId).Error
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Bad Request",
-			"message": err.Error(),
-		})
+	db, ok := requireDB(c)
+	if !ok {
 		return
 	}
 
-	c.JSON(http.StatusOK, SocialMedia)
+	socialMediaID, err := helpers.ParseUintParam(c, "socialMediaId")
+	if err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid social media id")
+		return
+	}
+
+	socialMedia := models.SocialMedia{}
+	if err := db.First(&socialMedia, socialMediaID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			jsonError(c, http.StatusNotFound, "Social Media Not Found", "social media does not exist")
+			return
+		}
+
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load social media")
+		return
+	}
+
+	c.JSON(http.StatusOK, socialMedia)
 }
 
 // UpdateSocialMedia godoc
@@ -120,40 +131,53 @@ func GetSocialMedia(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param socialMediaId path int true "ID of the social media"
+// @Param request body models.SocialMedia true "Social media update request body"
 // @Security BearerAuth
 // @Success 200 {object} models.SocialMedia "Update social media success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Social Media Not Found"
+// @Failure 400 {object} ErrorResponse "Invalid request"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden"
+// @Failure 404 {object} ErrorResponse "Social media not found"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /socialmedia/update/{socialMediaId} [put]
+// @Router /api/v1/social-media/{socialMediaId} [put]
 func UpdateSocialMedia(c *gin.Context) {
-	db := database.GetDB()
-	userData := c.MustGet("userData").(jwt.MapClaims)
-	contentType := helpers.GetContentType(c)
-	SocialMedia := models.SocialMedia{}
-
-	socialMediaId, _ := strconv.Atoi(c.Param("socialMediaId"))
-	userID := uint(userData["id"].(float64))
-
-	if contentType == appJson {
-		c.ShouldBindJSON(&SocialMedia)
-	} else {
-		c.ShouldBind(&SocialMedia)
-	}
-
-	SocialMedia.UserID = userID
-	SocialMedia.ID = uint(socialMediaId)
-
-	err := db.Model(&SocialMedia).Where("id = ?", socialMediaId).Updates(models.SocialMedia{Name: SocialMedia.Name, SocialMediaURL: SocialMedia.SocialMediaURL}).Error
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Bad Request",
-			"message": err.Error(),
-		})
+	db, ok := requireDB(c)
+	if !ok {
 		return
 	}
 
-	c.JSON(http.StatusOK, SocialMedia)
+	socialMediaID, err := helpers.ParseUintParam(c, "socialMediaId")
+	if err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid social media id")
+		return
+	}
+
+	socialMedia := models.SocialMedia{}
+	if err := helpers.BindRequest(c, &socialMedia); err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+	if err := helpers.ValidateHTTPURL(socialMedia.SocialMediaURL); err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	socialMedia.ID = socialMediaID
+	if err := db.Model(&socialMedia).Where("id = ?", socialMediaID).Updates(map[string]interface{}{
+		"name":             socialMedia.Name,
+		"social_media_url": socialMedia.SocialMediaURL,
+	}).Error; err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	if err := db.First(&socialMedia, socialMediaID).Error; err != nil {
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load updated social media")
+		return
+	}
+
+	c.JSON(http.StatusOK, socialMedia)
 }
 
 // DeleteSocialMedia godoc
@@ -164,28 +188,33 @@ func UpdateSocialMedia(c *gin.Context) {
 // @Produce json
 // @Param socialMediaId path int true "ID of the social media"
 // @Security BearerAuth
-// @Success 200 {string} string "Delete social media success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Social Media Not Found"
+// @Success 200 {object} DeleteResponse "Delete social media success"
+// @Failure 400 {object} ErrorResponse "Invalid social media id"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden"
+// @Failure 404 {object} ErrorResponse "Social media not found"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /socialmedia/delete/{socialMediaId} [delete]
+// @Router /api/v1/social-media/{socialMediaId} [delete]
 func DeleteSocialMedia(c *gin.Context) {
-	db := database.GetDB()
-	SocialMedia := models.SocialMedia{}
+	db, ok := requireDB(c)
+	if !ok {
+		return
+	}
 
-	socialMediaId, _ := strconv.Atoi(c.Param("socialMediaId"))
-
-	err := db.Where("id = ?", socialMediaId).Delete(&SocialMedia).Error
-
+	socialMediaID, err := helpers.ParseUintParam(c, "socialMediaId")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Delete Error",
-			"message": err.Error(),
-		})
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid social media id")
+		return
+	}
+
+	if err := db.Delete(&models.SocialMedia{}, socialMediaID).Error; err != nil {
+		jsonError(c, http.StatusBadRequest, "Delete Error", err.Error())
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"Status":  "Delete Success",
-		"Message": "The social media has been successfully deleted",
+		"status":  "delete_success",
+		"message": "the social media has been successfully deleted",
 	})
 }

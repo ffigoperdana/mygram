@@ -36,7 +36,16 @@ func HealthCheck(c *gin.Context) {
 // @Router /health/ready [get]
 func ReadinessCheck(c *gin.Context) {
 	db := database.GetDB()
-	
+	if db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":    "not ready",
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+			"service":   "mygram-api",
+			"error":     "database is not initialized",
+		})
+		return
+	}
+
 	// Check database connectivity
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -49,7 +58,7 @@ func ReadinessCheck(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	// Ping database
 	if err := sqlDB.Ping(); err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
@@ -61,7 +70,7 @@ func ReadinessCheck(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "ready",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),

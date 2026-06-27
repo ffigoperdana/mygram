@@ -1,8 +1,11 @@
 package main
 
 import (
+	"finalproject/config"
+	"finalproject/database"
 	"finalproject/router"
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -13,17 +16,17 @@ func main() {
 		return
 	}
 
-	// database.StartDB()
-	r := router.StartApp()
-	
-	// Get port from environment or default to 8080
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	if err := database.StartDB(); err != nil {
+		log.Fatalf("failed to start database: %v", err)
 	}
-	
-	fmt.Printf("Server starting on port %s\n", port)
-	r.Run(":" + port)
+
+	r := router.StartApp()
+	cfg := config.Load()
+
+	fmt.Printf("Server starting on port %s\n", cfg.Port)
+	if err := r.Run(":" + cfg.Port); err != nil {
+		log.Fatalf("failed to run server: %v", err)
+	}
 }
 
 func healthCheck() {

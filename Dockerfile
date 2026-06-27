@@ -1,6 +1,6 @@
 # Multi-stage build for Go application
 # Stage 1: Build stage  
-FROM golang:1.21-alpine3.19 AS builder
+FROM golang:1.26-alpine AS builder
 
 # Install git and ca-certificates (needed for fetching dependencies and HTTPS)
 RUN apk add --no-cache git ca-certificates tzdata && \
@@ -47,7 +47,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/mygram", "health"] || exit 1
+    CMD ["/mygram", "health"]
 
 # Run the binary
 ENTRYPOINT ["/mygram"]

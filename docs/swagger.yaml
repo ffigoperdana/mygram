@@ -1,4 +1,183 @@
 definitions:
+  controllers.AdminDeleteUserResponse:
+    properties:
+      message:
+        type: string
+      status:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  controllers.AdminStatsResponse:
+    properties:
+      active_users:
+        type: integer
+      admin_users:
+        type: integer
+      banned_users:
+        type: integer
+      generated_at:
+        type: string
+      recent_users:
+        items:
+          $ref: '#/definitions/controllers.PublicUserResponse'
+        type: array
+      total_comments:
+        type: integer
+      total_photos:
+        type: integer
+      total_social_media:
+        type: integer
+      total_users:
+        type: integer
+      users_seen_last_24h:
+        type: integer
+    type: object
+  controllers.AdminUserUpdateRequest:
+    properties:
+      age:
+        type: integer
+      ban_reason:
+        type: string
+      email:
+        type: string
+      role:
+        type: string
+      status:
+        type: string
+      username:
+        type: string
+    type: object
+  controllers.BanUserRequest:
+    properties:
+      reason:
+        type: string
+    type: object
+  controllers.CurrentUserResponse:
+    properties:
+      user:
+        $ref: '#/definitions/controllers.PublicUserResponse'
+    type: object
+  controllers.DeleteResponse:
+    properties:
+      message:
+        type: string
+      status:
+        type: string
+    type: object
+  controllers.ErrorResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  controllers.LoginRequest:
+    properties:
+      captcha_token:
+        type: string
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  controllers.ProfileUpdateRequest:
+    properties:
+      age:
+        type: integer
+      email:
+        type: string
+      username:
+        type: string
+    type: object
+  controllers.PublicUserResponse:
+    properties:
+      age:
+        type: integer
+      ban_reason:
+        type: string
+      banned_at:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      last_login_at:
+        type: string
+      last_seen_at:
+        type: string
+      role:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  controllers.RegisterRequest:
+    properties:
+      age:
+        type: integer
+      captcha_token:
+        type: string
+      email:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  controllers.RegisterResponse:
+    properties:
+      age:
+        type: integer
+      email:
+        type: string
+      id:
+        type: integer
+      role:
+        type: string
+      status:
+        type: string
+      username:
+        type: string
+    type: object
+  controllers.TokenResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/controllers.PublicUserResponse'
+    type: object
+  controllers.UploadPhotoResponse:
+    properties:
+      bucket:
+        type: string
+      content_type:
+        type: string
+      key:
+        type: string
+      size:
+        type: integer
+      url:
+        type: string
+    type: object
+  controllers.UsersListResponse:
+    properties:
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      users:
+        items:
+          $ref: '#/definitions/controllers.PublicUserResponse'
+        type: array
+    type: object
   models.Comment:
     properties:
       created_at:
@@ -58,6 +237,10 @@ definitions:
     properties:
       age:
         type: integer
+      ban_reason:
+        type: string
+      banned_at:
+        type: string
       comments:
         items:
           $ref: '#/definitions/models.Comment'
@@ -68,16 +251,22 @@ definitions:
         type: string
       id:
         type: integer
-      password:
+      last_login_at:
+        type: string
+      last_seen_at:
         type: string
       photos:
         items:
           $ref: '#/definitions/models.Photo'
         type: array
+      role:
+        type: string
       social_medias:
         items:
           $ref: '#/definitions/models.SocialMedia'
         type: array
+      status:
+        type: string
       updated_at:
         type: string
       username:
@@ -86,6 +275,1141 @@ definitions:
 info:
   contact: {}
 paths:
+  /api/v1/admin/stats:
+    get:
+      consumes:
+      - application/json
+      description: Get basic user and content metrics for the admin dashboard
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Admin stats response
+          schema:
+            $ref: '#/definitions/controllers.AdminStatsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get admin dashboard stats
+      tags:
+      - admin
+  /api/v1/admin/users:
+    get:
+      consumes:
+      - application/json
+      description: List users for admin management
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Page size
+        in: query
+        name: limit
+        type: integer
+      - description: Search username or email
+        in: query
+        name: search
+        type: string
+      - description: Filter by role
+        in: query
+        name: role
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Users list response
+          schema:
+            $ref: '#/definitions/controllers.UsersListResponse'
+        "400":
+          description: Invalid query
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List users
+      tags:
+      - admin
+  /api/v1/admin/users/{userId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a user account as an admin
+      parameters:
+      - description: ID of the user
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Delete user response
+          schema:
+            $ref: '#/definitions/controllers.AdminDeleteUserResponse'
+        "400":
+          description: Invalid user id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete user
+      tags:
+      - admin
+    get:
+      consumes:
+      - application/json
+      description: Get a user by ID for admin management
+      parameters:
+      - description: ID of the user
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User response
+          schema:
+            $ref: '#/definitions/controllers.PublicUserResponse'
+        "400":
+          description: Invalid user id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      description: Update a user profile, role, or status as an admin
+      parameters:
+      - description: ID of the user
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - description: User update request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.AdminUserUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated user response
+          schema:
+            $ref: '#/definitions/controllers.PublicUserResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user
+      tags:
+      - admin
+  /api/v1/admin/users/{userId}/ban:
+    post:
+      consumes:
+      - application/json
+      description: Ban a user account
+      parameters:
+      - description: ID of the user
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - description: Ban reason
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/controllers.BanUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Banned user response
+          schema:
+            $ref: '#/definitions/controllers.PublicUserResponse'
+        "400":
+          description: Invalid user id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Ban user
+      tags:
+      - admin
+  /api/v1/admin/users/{userId}/unban:
+    post:
+      consumes:
+      - application/json
+      description: Restore a banned user account
+      parameters:
+      - description: ID of the user
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Unbanned user response
+          schema:
+            $ref: '#/definitions/controllers.PublicUserResponse'
+        "400":
+          description: Invalid user id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unban user
+      tags:
+      - admin
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Login user by email
+      parameters:
+      - description: Login request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login response
+          schema:
+            $ref: '#/definitions/controllers.TokenResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Invalid email/password
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Token generation or database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      summary: Login user
+      tags:
+      - user
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register new user
+      parameters:
+      - description: Register request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Register success response
+          schema:
+            $ref: '#/definitions/controllers.RegisterResponse'
+        "400":
+          description: Invalid request or duplicate data
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      summary: Register user
+      tags:
+      - user
+  /api/v1/comments:
+    get:
+      consumes:
+      - application/json
+      description: Get all comments in finalproject
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Get all comments success
+          schema:
+            items:
+              $ref: '#/definitions/models.Comment'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all comments
+      tags:
+      - comment
+  /api/v1/comments/{commentId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete comment identified by given ID
+      parameters:
+      - description: ID of the comment
+        in: path
+        name: commentId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Delete comment success
+          schema:
+            $ref: '#/definitions/controllers.DeleteResponse'
+        "400":
+          description: Invalid comment id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: Comment not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete comment
+      tags:
+      - comment
+    get:
+      consumes:
+      - application/json
+      description: Get comments identified by given id
+      parameters:
+      - description: ID of the comments
+        in: path
+        name: commentId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Get comment success
+          schema:
+            $ref: '#/definitions/models.Comment'
+        "400":
+          description: Invalid comment id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: Comment not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get comments
+      tags:
+      - comments
+    put:
+      consumes:
+      - application/json
+      description: Update comment identified by given id
+      parameters:
+      - description: ID of the comment
+        in: path
+        name: commentId
+        required: true
+        type: integer
+      - description: Comment update request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.Comment'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Update comment success
+          schema:
+            $ref: '#/definitions/models.Comment'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: Comment not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update comment
+      tags:
+      - comment
+  /api/v1/me:
+    get:
+      consumes:
+      - application/json
+      description: Get the currently authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Current user response
+          schema:
+            $ref: '#/definitions/controllers.CurrentUserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - user
+    patch:
+      consumes:
+      - application/json
+      description: Update the currently authenticated user's profile. Role, status,
+        and ban fields are admin-only and cannot be changed here.
+      parameters:
+      - description: Profile update request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.ProfileUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated current user response
+          schema:
+            $ref: '#/definitions/controllers.CurrentUserResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update current user
+      tags:
+      - user
+  /api/v1/photos:
+    get:
+      consumes:
+      - application/json
+      description: Get all existing photos
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Get all photos success
+          schema:
+            items:
+              $ref: '#/definitions/models.Photo'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all photos
+      tags:
+      - photo
+    post:
+      consumes:
+      - application/json
+      description: Create photo to post in finalproject
+      parameters:
+      - description: Photo request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.Photo'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Create photo success
+          schema:
+            $ref: '#/definitions/models.Photo'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create photo
+      tags:
+      - photo
+  /api/v1/photos/{photoId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete photo identified by given ID
+      parameters:
+      - description: ID of the photo
+        in: path
+        name: photoId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Delete photo success
+          schema:
+            $ref: '#/definitions/controllers.DeleteResponse'
+        "400":
+          description: Invalid photo id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: Photo not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete photo
+      tags:
+      - photo
+    get:
+      consumes:
+      - application/json
+      description: Get photo by ID
+      parameters:
+      - description: ID of the photo
+        in: path
+        name: photoId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Get photo success
+          schema:
+            $ref: '#/definitions/models.Photo'
+        "400":
+          description: Invalid photo id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: Photo not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get photo
+      tags:
+      - photo
+    put:
+      consumes:
+      - application/json
+      description: Update photo identified by given ID
+      parameters:
+      - description: ID of the photo
+        in: path
+        name: photoId
+        required: true
+        type: integer
+      - description: Photo update request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.Photo'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Update photo success
+          schema:
+            $ref: '#/definitions/models.Photo'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: Photo not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update photo
+      tags:
+      - photo
+  /api/v1/photos/{photoId}/comments:
+    get:
+      consumes:
+      - application/json
+      description: Get all comments for photo with given id
+      parameters:
+      - description: ID of the photo
+        in: path
+        name: photoId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Get all comments success
+          schema:
+            items:
+              $ref: '#/definitions/models.Comment'
+            type: array
+        "400":
+          description: Invalid photo id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all comments for specific photo
+      tags:
+      - comment
+    post:
+      consumes:
+      - application/json
+      description: Create comments for photo identified by given id
+      parameters:
+      - description: ID of the photo
+        in: path
+        name: photoId
+        required: true
+        type: integer
+      - description: Comment request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.Comment'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Create comments success
+          schema:
+            $ref: '#/definitions/models.Comment'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: Photo not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create comments
+      tags:
+      - comments
+  /api/v1/social-media:
+    get:
+      consumes:
+      - application/json
+      description: Get all social media in finalproject
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Get all social media success
+          schema:
+            items:
+              $ref: '#/definitions/models.SocialMedia'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all social media
+      tags:
+      - social media
+    post:
+      consumes:
+      - application/json
+      description: Create social media of the user
+      parameters:
+      - description: Social media request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SocialMedia'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Create social media success
+          schema:
+            $ref: '#/definitions/models.SocialMedia'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create social media
+      tags:
+      - social media
+  /api/v1/social-media/{socialMediaId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete social media identified by given ID
+      parameters:
+      - description: ID of the social media
+        in: path
+        name: socialMediaId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Delete social media success
+          schema:
+            $ref: '#/definitions/controllers.DeleteResponse'
+        "400":
+          description: Invalid social media id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: Social media not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete social media
+      tags:
+      - social media
+    get:
+      consumes:
+      - application/json
+      description: Get social media identified by given id
+      parameters:
+      - description: ID of the social media
+        in: path
+        name: socialMediaId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Get social media success
+          schema:
+            $ref: '#/definitions/models.SocialMedia'
+        "400":
+          description: Invalid social media id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: Social media not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get social media
+      tags:
+      - social media
+    put:
+      consumes:
+      - application/json
+      description: Update social media identified by given id
+      parameters:
+      - description: ID of the social media
+        in: path
+        name: socialMediaId
+        required: true
+        type: integer
+      - description: Social media update request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SocialMedia'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Update social media success
+          schema:
+            $ref: '#/definitions/models.SocialMedia'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "404":
+          description: Social media not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update social media
+      tags:
+      - social media
+  /api/v1/uploads/photos:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload an image file to configured S3-compatible object storage
+        and return its public URL
+      parameters:
+      - description: Image file
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Upload success
+          schema:
+            $ref: '#/definitions/controllers.UploadPhotoResponse'
+        "400":
+          description: Invalid file
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "413":
+          description: File too large
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "502":
+          description: Object storage upload failed
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Object storage is not configured
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload photo image
+      tags:
+      - uploads
   /comments/create/{photoId}:
     post:
       consumes:
@@ -97,11 +1421,12 @@ paths:
         name: photoId
         required: true
         type: integer
-      - description: message
-        in: query
-        name: message
+      - description: Comment request body
+        in: body
+        name: request
         required: true
-        type: string
+        schema:
+          $ref: '#/definitions/models.Comment'
       produces:
       - application/json
       responses:
@@ -109,10 +1434,22 @@ paths:
           description: Create comments success
           schema:
             $ref: '#/definitions/models.Comment'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "404":
-          description: Photo Not Found
+          description: Photo not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create comments
@@ -135,11 +1472,27 @@ paths:
         "200":
           description: Delete comment success
           schema:
-            type: string
+            $ref: '#/definitions/controllers.DeleteResponse'
+        "400":
+          description: Invalid comment id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "404":
-          description: Comment Not Found
+          description: Comment not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete comment
@@ -163,10 +1516,26 @@ paths:
           description: Get comment success
           schema:
             $ref: '#/definitions/models.Comment'
+        "400":
+          description: Invalid comment id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "404":
-          description: Comment Not Found
+          description: Comment not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get comments
@@ -188,8 +1557,16 @@ paths:
             type: array
         "401":
           description: Unauthorized
-        "404":
-          description: Comments Not Found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get all comments
@@ -215,10 +1592,22 @@ paths:
             items:
               $ref: '#/definitions/models.Comment'
             type: array
+        "400":
+          description: Invalid photo id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
-        "404":
-          description: Comments Not Found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get all comments for specific photo
@@ -235,6 +1624,12 @@ paths:
         name: commentId
         required: true
         type: integer
+      - description: Comment update request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.Comment'
       produces:
       - application/json
       responses:
@@ -242,10 +1637,26 @@ paths:
           description: Update comment success
           schema:
             $ref: '#/definitions/models.Comment'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "404":
-          description: Comment Not Found
+          description: Comment not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update comment
@@ -305,26 +1716,38 @@ paths:
       summary: Readiness check endpoint
       tags:
       - health
+  /openapi/public.json:
+    get:
+      consumes:
+      - application/json
+      description: Get a public OpenAPI spec that excludes admin and legacy endpoints
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Public OpenAPI spec
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to build public spec
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+      summary: Get public OpenAPI spec
+      tags:
+      - docs
   /photos/create:
     post:
       consumes:
       - application/json
       description: Create photo to post in finalproject
       parameters:
-      - description: title
-        in: query
-        name: title
+      - description: Photo request body
+        in: body
+        name: request
         required: true
-        type: string
-      - description: caption
-        in: query
-        name: caption
-        type: string
-      - description: photo_url
-        in: query
-        name: photo_url
-        required: true
-        type: string
+        schema:
+          $ref: '#/definitions/models.Photo'
       produces:
       - application/json
       responses:
@@ -332,8 +1755,18 @@ paths:
           description: Create photo success
           schema:
             $ref: '#/definitions/models.Photo'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create photo
@@ -356,11 +1789,27 @@ paths:
         "200":
           description: Delete photo success
           schema:
-            type: string
+            $ref: '#/definitions/controllers.DeleteResponse'
+        "400":
+          description: Invalid photo id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "404":
-          description: Photo Not Found
+          description: Photo not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete photo
@@ -384,10 +1833,26 @@ paths:
           description: Get photo success
           schema:
             $ref: '#/definitions/models.Photo'
+        "400":
+          description: Invalid photo id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "404":
-          description: Photo Not Found
+          description: Photo not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get photo
@@ -409,8 +1874,16 @@ paths:
             type: array
         "401":
           description: Unauthorized
-        "404":
-          description: Photos Not Found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get all photos
@@ -427,6 +1900,12 @@ paths:
         name: photoId
         required: true
         type: integer
+      - description: Photo update request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.Photo'
       produces:
       - application/json
       responses:
@@ -434,10 +1913,26 @@ paths:
           description: Update photo success
           schema:
             $ref: '#/definitions/models.Photo'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "404":
-          description: Photo Not Found
+          description: Photo not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update photo
@@ -449,16 +1944,12 @@ paths:
       - application/json
       description: Create social media of the user
       parameters:
-      - description: name
-        in: query
-        name: name
+      - description: Social media request body
+        in: body
+        name: request
         required: true
-        type: string
-      - description: social_media_url
-        in: query
-        name: social_media_url
-        required: true
-        type: string
+        schema:
+          $ref: '#/definitions/models.SocialMedia'
       produces:
       - application/json
       responses:
@@ -466,8 +1957,18 @@ paths:
           description: Create social media success
           schema:
             $ref: '#/definitions/models.SocialMedia'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create social media
@@ -490,11 +1991,27 @@ paths:
         "200":
           description: Delete social media success
           schema:
-            type: string
+            $ref: '#/definitions/controllers.DeleteResponse'
+        "400":
+          description: Invalid social media id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "404":
-          description: Social Media Not Found
+          description: Social media not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete social media
@@ -518,10 +2035,26 @@ paths:
           description: Get social media success
           schema:
             $ref: '#/definitions/models.SocialMedia'
+        "400":
+          description: Invalid social media id
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "404":
-          description: Social Media Not Found
+          description: Social media not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get social media
@@ -543,8 +2076,16 @@ paths:
             type: array
         "401":
           description: Unauthorized
-        "404":
-          description: Social Media Not Found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get all social media
@@ -561,6 +2102,12 @@ paths:
         name: socialMediaId
         required: true
         type: integer
+      - description: Social media update request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SocialMedia'
       produces:
       - application/json
       responses:
@@ -568,10 +2115,26 @@ paths:
           description: Update social media success
           schema:
             $ref: '#/definitions/models.SocialMedia'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "404":
-          description: Social Media Not Found
+          description: Social media not found
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update social media
@@ -583,24 +2146,35 @@ paths:
       - application/json
       description: Login user by email
       parameters:
-      - description: email
-        in: query
-        name: email
+      - description: Login request body
+        in: body
+        name: request
         required: true
-        type: string
-      - description: password
-        in: query
-        name: password
-        required: true
-        type: string
+        schema:
+          $ref: '#/definitions/controllers.LoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Login response
-          schema: {}
+          schema:
+            $ref: '#/definitions/controllers.TokenResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
         "401":
-          description: Unauthorized
+          description: Invalid email/password
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "500":
+          description: Token generation or database error
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       summary: Login user
       tags:
       - user
@@ -610,33 +2184,27 @@ paths:
       - application/json
       description: Register new user
       parameters:
-      - description: username
-        in: query
-        name: username
+      - description: Register request body
+        in: body
+        name: request
         required: true
-        type: string
-      - description: email
-        in: query
-        name: email
-        required: true
-        type: string
-      - description: password
-        in: query
-        name: password
-        required: true
-        type: string
-      - description: age
-        in: query
-        name: age
-        required: true
-        type: integer
+        schema:
+          $ref: '#/definitions/controllers.RegisterRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Register success response
           schema:
-            $ref: '#/definitions/models.User'
+            $ref: '#/definitions/controllers.RegisterResponse'
+        "400":
+          description: Invalid request or duplicate data
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
+        "503":
+          description: Database is not ready
+          schema:
+            $ref: '#/definitions/controllers.ErrorResponse'
       summary: Register user
       tags:
       - user

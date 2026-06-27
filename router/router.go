@@ -1,16 +1,17 @@
 package router
 
 import (
+	"finalproject/config"
 	"finalproject/controllers"
 	"finalproject/middlewares"
+	"finalproject/models"
 
 	"github.com/gin-gonic/gin"
 
 	_ "finalproject/docs"
 
-	ginSwagger "github.com/swaggo/gin-swagger"
-
 	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // @title Mygram API
@@ -26,71 +27,146 @@ import (
 // @license.url http://www.apache.org/licenses/license-2.0.html
 // @BasePath /
 func StartApp() *gin.Engine {
+	cfg := config.Load()
 	r := gin.Default()
+	r.MaxMultipartMemory = cfg.S3UploadMaxBytes
+	r.Use(middlewares.SecurityHeaders())
+	r.Use(middlewares.CORS())
 
-	// Health check endpoints
+	registerHealthRoutes(r)
+	registerLegacyRoutes(r)
+	registerV1Routes(r.Group("/api/v1"))
+	registerDocsRoutes(r, cfg)
+
+	return r
+}
+
+func registerHealthRoutes(r *gin.Engine) {
 	r.GET("/health", controllers.HealthCheck)
 	r.GET("/health/ready", controllers.ReadinessCheck)
 	r.GET("/health/live", controllers.LivenessCheck)
+}
 
+func registerLegacyRoutes(r *gin.Engine) {
 	userRouter := r.Group("/users")
 	{
-		// Create
 		userRouter.POST("/register", controllers.UserRegister)
-		// Read
 		userRouter.POST("/login", controllers.UserLogin)
 	}
 
 	photoRouter := r.Group("/photos")
 	{
 		photoRouter.Use(middlewares.Authentication())
-		// Create
 		photoRouter.POST("/create", controllers.CreatePhoto)
-		// Read
 		photoRouter.GET("/getall", controllers.GetAllPhotos)
-		// Read
 		photoRouter.GET("/get/:photoId", controllers.GetPhoto)
-		// Update
 		photoRouter.PUT("/update/:photoId", middlewares.PhotoAuthorization(), controllers.UpdatePhoto)
-		// Delete
 		photoRouter.DELETE("/delete/:photoId", middlewares.PhotoAuthorization(), controllers.DeletePhoto)
 	}
 
 	commentRouter := r.Group("/comments")
 	{
 		commentRouter.Use(middlewares.Authentication())
-		// Create
 		commentRouter.POST("/create/:photoId", controllers.CreateComment)
-		// Read
 		commentRouter.GET("/getall", controllers.GetAllComments)
-		// Read
 		commentRouter.GET("/getall/:photoId", controllers.GetAllCommentsForPhoto)
-		// Read
 		commentRouter.GET("/get/:commentId", controllers.GetComment)
-		// Update
 		commentRouter.PUT("/update/:commentId", middlewares.CommentAuthorization(), controllers.UpdateComment)
-		// Delete
 		commentRouter.DELETE("/delete/:commentId", middlewares.CommentAuthorization(), controllers.DeleteComment)
-
 	}
 
 	socmedRouter := r.Group("/socialmedia")
 	{
 		socmedRouter.Use(middlewares.Authentication())
-		// Create
 		socmedRouter.POST("/create", controllers.CreateSocialMedia)
-		// Read
 		socmedRouter.GET("/getall", controllers.GetAllSocialMedias)
-		// Read
 		socmedRouter.GET("/get/:socialMediaId", controllers.GetSocialMedia)
-		// Update
 		socmedRouter.PUT("/update/:socialMediaId", middlewares.SocialMediaAuthorization(), controllers.UpdateSocialMedia)
-		// Delete
 		socmedRouter.DELETE("/delete/:socialMediaId", middlewares.SocialMediaAuthorization(), controllers.DeleteSocialMedia)
+	}
+}
 
+func registerV1Routes(api *gin.RouterGroup) {
+	authRouter := api.Group("/auth")
+	{
+		authRouter.POST("/register", controllers.UserRegister)
+		authRouter.POST("/login", controllers.UserLogin)
 	}
 
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+	meRouter := api.Group("/me")
+	{
+		meRouter.Use(middlewares.Authentication())
+		meRouter.GET("", controllers.GetMe)
+		meRouter.PATCH("", controllers.UpdateMe)
+	}
 
-	return r
+	photoRouter := api.Group("/photos")
+	{
+		photoRouter.Use(middlewares.Authentication())
+		photoRouter.POST("", controllers.CreatePhoto)
+		photoRouter.GET("", controllers.GetAllPhotos)
+		photoRouter.GET("/:photoId", controllers.GetPhoto)
+		photoRouter.PUT("/:photoId", middlewares.PhotoAuthorization(), controllers.UpdatePhoto)
+		photoRouter.DELETE("/:photoId", middlewares.PhotoAuthorization(), controllers.DeletePhoto)
+	}
+
+	uploadRouter := api.Group("/uploads")
+	{
+		uploadRouter.Use(middlewares.Authentication())
+		uploadRouter.POST("/photos", controllers.UploadPhotoImage)
+	}
+
+	commentRouter := api.Group("/comments")
+	{
+		commentRouter.Use(middlewares.Authentication())
+		commentRouter.GET("", controllers.GetAllComments)
+		commentRouter.GET("/:commentId", controllers.GetComment)
+		commentRouter.PUT("/:commentId", middlewares.CommentAuthorization(), controllers.UpdateComment)
+		commentRouter.DELETE("/:commentId", middlewares.CommentAuthorization(), controllers.DeleteComment)
+	}
+
+	photoCommentsRouter := api.Group("/photos/:photoId/comments")
+	{
+		photoCommentsRouter.Use(middlewares.Authentication())
+		photoCommentsRouter.GET("", controllers.GetAllCommentsForPhoto)
+		photoCommentsRouter.POST("", controllers.CreateComment)
+	}
+
+	socialRouter := api.Group("/social-media")
+	{
+		socialRouter.Use(middlewares.Authentication())
+		socialRouter.POST("", controllers.CreateSocialMedia)
+		socialRouter.GET("", controllers.GetAllSocialMedias)
+		socialRouter.GET("/:socialMediaId", controllers.GetSocialMedia)
+		socialRouter.PUT("/:socialMediaId", middlewares.SocialMediaAuthorization(), controllers.UpdateSocialMedia)
+		socialRouter.DELETE("/:socialMediaId", middlewares.SocialMediaAuthorization(), controllers.DeleteSocialMedia)
+	}
+
+	adminRouter := api.Group("/admin")
+	{
+		adminRouter.Use(middlewares.Authentication(), middlewares.RequireRole(models.RoleAdmin))
+		adminRouter.GET("/stats", controllers.AdminStats)
+		adminRouter.GET("/users", controllers.AdminListUsers)
+		adminRouter.GET("/users/:userId", controllers.AdminGetUser)
+		adminRouter.PATCH("/users/:userId", controllers.AdminUpdateUser)
+		adminRouter.DELETE("/users/:userId", controllers.AdminDeleteUser)
+		adminRouter.POST("/users/:userId/ban", controllers.AdminBanUser)
+		adminRouter.POST("/users/:userId/unban", controllers.AdminUnbanUser)
+	}
+}
+
+func registerDocsRoutes(r *gin.Engine, cfg config.Config) {
+	if cfg.PublicOpenAPI || cfg.SwaggerUIMode == "public" {
+		r.GET("/openapi/public.json", controllers.PublicOpenAPISpec)
+	}
+
+	switch cfg.SwaggerUIMode {
+	case "internal":
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+	case "public":
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(
+			swaggerfiles.Handler,
+			ginSwagger.URL("/openapi/public.json"),
+		))
+	}
 }

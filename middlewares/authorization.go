@@ -2,43 +2,55 @@ package middlewares
 
 import (
 	"finalproject/database"
+	"finalproject/helpers"
 	"finalproject/models"
 	"net/http"
-	"strconv"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 )
 
 func PhotoAuthorization() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		db := database.GetDB()
-		photoId, err := strconv.Atoi(c.Param("photoId"))
+		if db == nil {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"error":   "Service Unavailable",
+				"message": "database is not ready",
+			})
+			return
+		}
+
+		photoID, err := helpers.ParseUintParam(c, "photoId")
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error":   "Bad Request",
-				"message": "Invalid parameter",
+				"message": "invalid photo id",
 			})
 			return
 		}
-		userData := c.MustGet("userData").(jwt.MapClaims)
-		userID := uint(userData["id"].(float64))
-		Photo := models.Photo{}
 
-		err = db.Select("user_id").First(&Photo, uint(photoId)).Error
+		claims, ok := helpers.GetUserClaims(c)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error":   "Unauthenticated",
+				"message": "sign in to proceed",
+			})
+			return
+		}
 
-		if err != nil {
+		photo := models.Photo{}
+		if err := db.Select("user_id").First(&photo, photoID).Error; err != nil {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"error":   "Photo Not Found",
-				"message": "Photo doesn't exist",
+				"message": "photo does not exist",
 			})
 			return
 		}
 
-		if Photo.UserID != userID {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error":   "Unauthorized",
-				"message": "You're not the owner of the photo",
+		if photo.UserID != claims.ID {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":   "Forbidden",
+				"message": "you are not the owner of the photo",
 			})
 			return
 		}
@@ -50,32 +62,45 @@ func PhotoAuthorization() gin.HandlerFunc {
 func CommentAuthorization() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		db := database.GetDB()
-		commentId, err := strconv.Atoi(c.Param("commentId"))
+		if db == nil {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"error":   "Service Unavailable",
+				"message": "database is not ready",
+			})
+			return
+		}
+
+		commentID, err := helpers.ParseUintParam(c, "commentId")
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error":   "Bad Request",
-				"message": "Invalid parameter",
+				"message": "invalid comment id",
 			})
 			return
 		}
-		userData := c.MustGet("userData").(jwt.MapClaims)
-		userID := uint(userData["id"].(float64))
-		Comment := models.Comment{}
 
-		err = db.Select("user_id").First(&Comment, uint(commentId)).Error
+		claims, ok := helpers.GetUserClaims(c)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error":   "Unauthenticated",
+				"message": "sign in to proceed",
+			})
+			return
+		}
 
-		if err != nil {
+		comment := models.Comment{}
+		if err := db.Select("user_id").First(&comment, commentID).Error; err != nil {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"error":   "Comment Not Found",
-				"message": "Comment doesn't exist",
+				"message": "comment does not exist",
 			})
 			return
 		}
 
-		if Comment.UserID != userID {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error":   "Unauthorized",
-				"message": "You're not the writer of the comment",
+		if comment.UserID != claims.ID {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":   "Forbidden",
+				"message": "you are not the writer of the comment",
 			})
 			return
 		}
@@ -87,32 +112,45 @@ func CommentAuthorization() gin.HandlerFunc {
 func SocialMediaAuthorization() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		db := database.GetDB()
-		socialMediaId, err := strconv.Atoi(c.Param("socialMediaId"))
+		if db == nil {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"error":   "Service Unavailable",
+				"message": "database is not ready",
+			})
+			return
+		}
+
+		socialMediaID, err := helpers.ParseUintParam(c, "socialMediaId")
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error":   "Bad Request",
-				"message": "Invalid parameter",
+				"message": "invalid social media id",
 			})
 			return
 		}
-		userData := c.MustGet("userData").(jwt.MapClaims)
-		userID := uint(userData["id"].(float64))
-		SocialMedia := models.SocialMedia{}
 
-		err = db.Select("user_id").First(&SocialMedia, uint(socialMediaId)).Error
+		claims, ok := helpers.GetUserClaims(c)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error":   "Unauthenticated",
+				"message": "sign in to proceed",
+			})
+			return
+		}
 
-		if err != nil {
+		socialMedia := models.SocialMedia{}
+		if err := db.Select("user_id").First(&socialMedia, socialMediaID).Error; err != nil {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"error":   "Social Media Not Found",
-				"message": "Social media doesn't exist",
+				"message": "social media does not exist",
 			})
 			return
 		}
 
-		if SocialMedia.UserID != userID {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error":   "Unauthorized",
-				"message": "You're not the owner of the social media",
+		if socialMedia.UserID != claims.ID {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":   "Forbidden",
+				"message": "you are not the owner of the social media",
 			})
 			return
 		}

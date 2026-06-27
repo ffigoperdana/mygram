@@ -1,14 +1,13 @@
 package controllers
 
 import (
-	"finalproject/database"
+	"errors"
 	"finalproject/helpers"
 	"finalproject/models"
 	"net/http"
-	"strconv"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // CreateComments godoc
@@ -18,53 +17,57 @@ import (
 // @Accept json
 // @Produce json
 // @Param photoId path int true "ID of the photo"
-// @Param message query string true "message"
+// @Param request body models.Comment true "Comment request body"
 // @Security BearerAuth
 // @Success 201 {object} models.Comment "Create comments success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Photo Not Found"
+// @Failure 400 {object} ErrorResponse "Invalid request"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 404 {object} ErrorResponse "Photo not found"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /comments/create/{photoId} [post]
+// @Router /api/v1/photos/{photoId}/comments [post]
 func CreateComment(c *gin.Context) {
-	db := database.GetDB()
-	userData := c.MustGet("userData").(jwt.MapClaims)
-	photoId, _ := strconv.Atoi(c.Param("photoId"))
-	contentType := helpers.GetContentType(c)
-
-	Comment := models.Comment{}
-	userID := uint(userData["id"].(float64))
-
-	Photo := models.Photo{}
-
-	err := db.Select("user_id").First(&Photo, uint(photoId)).Error
-
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-			"error":   "Photo Not Found",
-			"message": "Photo doesn't exist, failed to create comments",
-		})
+	db, ok := requireDB(c)
+	if !ok {
 		return
 	}
 
-	if contentType == appJson {
-		c.ShouldBindJSON(&Comment)
-	} else {
-		c.ShouldBind(&Comment)
-	}
-
-	Comment.UserID = userID
-	Comment.PhotoID = uint(photoId)
-
-	err = db.Debug().Create(&Comment).Error
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Bad Request",
-			"message": err.Error(),
-		})
+	claims, ok := requireClaims(c)
+	if !ok {
 		return
 	}
 
-	c.JSON(http.StatusCreated, Comment)
+	photoID, err := helpers.ParseUintParam(c, "photoId")
+	if err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid photo id")
+		return
+	}
+
+	photo := models.Photo{}
+	if err := db.Select("id").First(&photo, photoID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			jsonError(c, http.StatusNotFound, "Photo Not Found", "photo does not exist, failed to create comment")
+			return
+		}
+
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load photo")
+		return
+	}
+
+	comment := models.Comment{}
+	if err := helpers.BindRequest(c, &comment); err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	comment.UserID = claims.ID
+	comment.PhotoID = photoID
+	if err := db.Create(&comment).Error; err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusCreated, comment)
 }
 
 // GetAllComments godoc
@@ -75,20 +78,20 @@ func CreateComment(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} []models.Comment "Get all comments success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Comments Not Found"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 500 {object} ErrorResponse "Database error"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /comments/getall [get]
+// @Router /api/v1/comments [get]
 func GetAllComments(c *gin.Context) {
-	db := database.GetDB()
+	db, ok := requireDB(c)
+	if !ok {
+		return
+	}
+
 	allComments := []models.Comment{}
-
-	db.Find(&allComments)
-
-	if len(allComments) == 0 {
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-			"error_status":  "No comments found",
-			"error_message": "There are no comments found.",
-		})
+	if err := db.Find(&allComments).Error; err != nil {
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load comments")
 		return
 	}
 
@@ -104,21 +107,27 @@ func GetAllComments(c *gin.Context) {
 // @Param photoId path int true "ID of the photo"
 // @Security BearerAuth
 // @Success 200 {object} []models.Comment "Get all comments success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Comments Not Found"
+// @Failure 400 {object} ErrorResponse "Invalid photo id"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 500 {object} ErrorResponse "Database error"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /comments/getall/{photoId} [get]
+// @Router /api/v1/photos/{photoId}/comments [get]
 func GetAllCommentsForPhoto(c *gin.Context) {
-	db := database.GetDB()
-	photoId, _ := strconv.Atoi(c.Param("photoId"))
+	db, ok := requireDB(c)
+	if !ok {
+		return
+	}
+
+	photoID, err := helpers.ParseUintParam(c, "photoId")
+	if err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid photo id")
+		return
+	}
+
 	allComments := []models.Comment{}
-
-	db.Where("photo_id = ?", photoId).Find(&allComments)
-
-	if len(allComments) == 0 {
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-			"error_status":  "No Comments found",
-			"error_message": "There are no comments found for this photo.",
-		})
+	if err := db.Where("photo_id = ?", photoID).Find(&allComments).Error; err != nil {
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load comments")
 		return
 	}
 
@@ -134,28 +143,37 @@ func GetAllCommentsForPhoto(c *gin.Context) {
 // @Param commentId path int true "ID of the comments"
 // @Security BearerAuth
 // @Success 200 {object} models.Comment "Get comment success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Comment Not Found"
+// @Failure 400 {object} ErrorResponse "Invalid comment id"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 404 {object} ErrorResponse "Comment not found"
+// @Failure 500 {object} ErrorResponse "Database error"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /comments/get/{commentId} [get]
+// @Router /api/v1/comments/{commentId} [get]
 func GetComment(c *gin.Context) {
-	db := database.GetDB()
-	Comment := models.Comment{}
-
-	commentId, _ := strconv.Atoi(c.Param("commentId"))
-
-	Comment.ID = uint(commentId)
-
-	err := db.First(&Comment, "id = ?", commentId).Error
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Bad Request",
-			"message": err.Error(),
-		})
+	db, ok := requireDB(c)
+	if !ok {
 		return
 	}
 
-	c.JSON(http.StatusOK, Comment)
+	commentID, err := helpers.ParseUintParam(c, "commentId")
+	if err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid comment id")
+		return
+	}
+
+	comment := models.Comment{}
+	if err := db.First(&comment, commentID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			jsonError(c, http.StatusNotFound, "Comment Not Found", "comment does not exist")
+			return
+		}
+
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load comment")
+		return
+	}
+
+	c.JSON(http.StatusOK, comment)
 }
 
 // UpdateComment godoc
@@ -165,50 +183,48 @@ func GetComment(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param commentId path int true "ID of the comment"
+// @Param request body models.Comment true "Comment update request body"
 // @Security BearerAuth
 // @Success 200 {object} models.Comment "Update comment success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Comment Not Found"
+// @Failure 400 {object} ErrorResponse "Invalid request"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden"
+// @Failure 404 {object} ErrorResponse "Comment not found"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /comments/update/{commentId} [put]
+// @Router /api/v1/comments/{commentId} [put]
 func UpdateComment(c *gin.Context) {
-	db := database.GetDB()
-	userData := c.MustGet("userData").(jwt.MapClaims)
-	contentType := helpers.GetContentType(c)
-	Comment := models.Comment{}
-
-	commentId, _ := strconv.Atoi(c.Param("commentId"))
-	userID := uint(userData["id"].(float64))
-
-	if contentType == appJson {
-		c.ShouldBindJSON(&Comment)
-	} else {
-		c.ShouldBind(&Comment)
-	}
-
-	Comment.UserID = userID
-	Comment.ID = uint(commentId)
-
-	err := db.Model(&Comment).Where("id = ?", commentId).Updates(models.Comment{Message: Comment.Message}).Error
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Bad Request",
-			"message": err.Error(),
-		})
+	db, ok := requireDB(c)
+	if !ok {
 		return
 	}
 
-	err = db.First(&Comment, "id = ?", commentId).Error
-
+	commentID, err := helpers.ParseUintParam(c, "commentId")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Bad Request",
-			"message": err.Error(),
-		})
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid comment id")
 		return
 	}
 
-	c.JSON(http.StatusOK, Comment)
+	comment := models.Comment{}
+	if err := helpers.BindRequest(c, &comment); err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	comment.ID = commentID
+	if err := db.Model(&comment).Where("id = ?", commentID).Updates(map[string]interface{}{
+		"message": comment.Message,
+	}).Error; err != nil {
+		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
+	if err := db.First(&comment, commentID).Error; err != nil {
+		jsonError(c, http.StatusInternalServerError, "Internal Server Error", "failed to load updated comment")
+		return
+	}
+
+	c.JSON(http.StatusOK, comment)
 }
 
 // DeleteComment godoc
@@ -219,28 +235,33 @@ func UpdateComment(c *gin.Context) {
 // @Produce json
 // @Param commentId path int true "ID of the comment"
 // @Security BearerAuth
-// @Success 200 {string} string "Delete comment success"
-// @Failure 401 "Unauthorized"
-// @Failure 404 "Comment Not Found"
+// @Success 200 {object} DeleteResponse "Delete comment success"
+// @Failure 400 {object} ErrorResponse "Invalid comment id"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden"
+// @Failure 404 {object} ErrorResponse "Comment not found"
+// @Failure 503 {object} ErrorResponse "Database is not ready"
 // @Router /comments/delete/{commentId} [delete]
+// @Router /api/v1/comments/{commentId} [delete]
 func DeleteComment(c *gin.Context) {
-	db := database.GetDB()
-	Comment := models.Comment{}
+	db, ok := requireDB(c)
+	if !ok {
+		return
+	}
 
-	commentId, _ := strconv.Atoi(c.Param("commentId"))
-
-	err := db.Where("id = ?", commentId).Delete(&Comment).Error
-
+	commentID, err := helpers.ParseUintParam(c, "commentId")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err":     "Delete Error",
-			"message": err.Error(),
-		})
+		jsonError(c, http.StatusBadRequest, "Bad Request", "invalid comment id")
+		return
+	}
+
+	if err := db.Delete(&models.Comment{}, commentID).Error; err != nil {
+		jsonError(c, http.StatusBadRequest, "Delete Error", err.Error())
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"Status":  "Delete Success",
-		"Message": "The comment has been successfully deleted",
+		"status":  "delete_success",
+		"message": "the comment has been successfully deleted",
 	})
 }
