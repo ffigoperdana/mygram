@@ -15,6 +15,7 @@ pipeline {
         string(name: 'CAP_SITE_KEY', defaultValue: '', description: 'Frontend Cap captcha site key. Required when CAP_ENABLED=true.')
         booleanParam(name: 'CAP_REQUIRED_ON_LOGIN', defaultValue: true, description: 'Require Cap captcha on the login form.')
         string(name: 'GHCR_OWNER_REPO', defaultValue: '', description: 'Required when PUSH_IMAGES=true, for example ghcr.io/owner/mygram.')
+        booleanParam(name: 'DEPLOY_TO_COOLIFY', defaultValue: false, description: 'Trigger the Coolify deploy webhook after pushing images. Requires Jenkins secret text credential coolify-deploy-webhook-url.')
     }
 
     environment {
@@ -169,9 +170,13 @@ pipeline {
                     }
                     env.BACKEND_REMOTE_IMAGE = "${imagePrefix}-api:${env.EFFECTIVE_IMAGE_TAG}"
                     env.FRONTEND_REMOTE_IMAGE = "${imagePrefix}-web:${env.EFFECTIVE_IMAGE_TAG}"
+                    env.BACKEND_MAIN_IMAGE = "${imagePrefix}-api:main"
+                    env.FRONTEND_MAIN_IMAGE = "${imagePrefix}-web:main"
                 }
                 sh 'docker tag "${BACKEND_LOCAL_IMAGE}" "${BACKEND_REMOTE_IMAGE}"'
                 sh 'docker tag "${FRONTEND_LOCAL_IMAGE}" "${FRONTEND_REMOTE_IMAGE}"'
+                sh 'docker tag "${BACKEND_LOCAL_IMAGE}" "${BACKEND_MAIN_IMAGE}"'
+                sh 'docker tag "${FRONTEND_LOCAL_IMAGE}" "${FRONTEND_MAIN_IMAGE}"'
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'ghcr',
@@ -185,6 +190,24 @@ pipeline {
                     '''
                     sh 'docker push "${BACKEND_REMOTE_IMAGE}"'
                     sh 'docker push "${FRONTEND_REMOTE_IMAGE}"'
+                    sh 'docker push "${BACKEND_MAIN_IMAGE}"'
+                    sh 'docker push "${FRONTEND_MAIN_IMAGE}"'
+                }
+            }
+        }
+
+        stage('Trigger Coolify') {
+            when {
+                allOf {
+                    expression { return params.PUSH_IMAGES }
+                    expression { return params.DEPLOY_TO_COOLIFY }
+                }
+            }
+            steps {
+                withCredentials([
+                    string(credentialsId: 'coolify-deploy-webhook-url', variable: 'COOLIFY_DEPLOY_WEBHOOK_URL')
+                ]) {
+                    sh 'curl --fail --silent --show-error --location "$COOLIFY_DEPLOY_WEBHOOK_URL"'
                 }
             }
         }
@@ -194,6 +217,7 @@ pipeline {
         success {
             echo "Phase E checks completed. Backend and frontend Dockerfiles built successfully in Jenkins."
             echo "Effective image tag: ${env.EFFECTIVE_IMAGE_TAG}"
+            echo "Mutable production tags: ${env.BACKEND_MAIN_IMAGE ?: 'not pushed'} and ${env.FRONTEND_MAIN_IMAGE ?: 'not pushed'}"
         }
         failure {
             echo 'Phase E checks failed. Review the failing stage before moving to deploy automation.'
