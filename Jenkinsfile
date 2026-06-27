@@ -10,6 +10,10 @@ pipeline {
         booleanParam(name: 'PUSH_IMAGES', defaultValue: false, description: 'Push GHCR images after build checks. Keep false for Phase E.')
         string(name: 'IMAGE_TAG', defaultValue: '', description: 'Optional image tag. Defaults to git SHA.')
         string(name: 'PUBLIC_API_BASE_URL', defaultValue: 'https://api.mygram.example.com', description: 'Frontend build-time API URL.')
+        booleanParam(name: 'CAP_ENABLED', defaultValue: true, description: 'Enable Cap captcha in the production frontend build.')
+        string(name: 'CAP_BASE_URL', defaultValue: 'https://cap.fgdev.tech', description: 'Frontend Cap captcha base URL.')
+        string(name: 'CAP_SITE_KEY', defaultValue: '', description: 'Frontend Cap captcha site key. Required when CAP_ENABLED=true.')
+        booleanParam(name: 'CAP_REQUIRED_ON_LOGIN', defaultValue: true, description: 'Require Cap captcha on the login form.')
         string(name: 'GHCR_OWNER_REPO', defaultValue: '', description: 'Required when PUSH_IMAGES=true, for example ghcr.io/owner/mygram.')
     }
 
@@ -69,11 +73,16 @@ pipeline {
                     sh 'npm run lint'
                     sh 'npm run test'
                     sh '''
+                        if [ "${CAP_ENABLED}" = "true" ] && [ -z "${CAP_SITE_KEY}" ]; then
+                          echo "CAP_SITE_KEY is required when CAP_ENABLED=true"
+                          exit 1
+                        fi
+
                         VITE_API_BASE_URL="${PUBLIC_API_BASE_URL}" \
-                        VITE_CAP_ENABLED=false \
-                        VITE_CAP_BASE_URL=https://cap.fgdev.tech \
-                        VITE_CAP_SITE_KEY=jenkins-site-key \
-                        VITE_CAP_REQUIRED_ON_LOGIN=true \
+                        VITE_CAP_ENABLED="${CAP_ENABLED}" \
+                        VITE_CAP_BASE_URL="${CAP_BASE_URL}" \
+                        VITE_CAP_SITE_KEY="${CAP_SITE_KEY}" \
+                        VITE_CAP_REQUIRED_ON_LOGIN="${CAP_REQUIRED_ON_LOGIN}" \
                         npm run build
                     '''
                 }
@@ -84,12 +93,17 @@ pipeline {
             steps {
                 sh 'docker build -t "${BACKEND_LOCAL_IMAGE}" .'
                 sh '''
+                    if [ "${CAP_ENABLED}" = "true" ] && [ -z "${CAP_SITE_KEY}" ]; then
+                      echo "CAP_SITE_KEY is required when CAP_ENABLED=true"
+                      exit 1
+                    fi
+
                     docker build \
                       --build-arg VITE_API_BASE_URL="${PUBLIC_API_BASE_URL}" \
-                      --build-arg VITE_CAP_ENABLED=false \
-                      --build-arg VITE_CAP_BASE_URL=https://cap.fgdev.tech \
-                      --build-arg VITE_CAP_SITE_KEY=jenkins-site-key \
-                      --build-arg VITE_CAP_REQUIRED_ON_LOGIN=true \
+                      --build-arg VITE_CAP_ENABLED="${CAP_ENABLED}" \
+                      --build-arg VITE_CAP_BASE_URL="${CAP_BASE_URL}" \
+                      --build-arg VITE_CAP_SITE_KEY="${CAP_SITE_KEY}" \
+                      --build-arg VITE_CAP_REQUIRED_ON_LOGIN="${CAP_REQUIRED_ON_LOGIN}" \
                       -t "${FRONTEND_LOCAL_IMAGE}" \
                       ./mygram-frontend
                 '''
