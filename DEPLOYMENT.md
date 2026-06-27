@@ -76,11 +76,13 @@ For Jenkins:
 ```bash
 GHCR_USERNAME=<github-username-or-org>
 GHCR_TOKEN=<github-token-with-package-write>
-COOLIFY_BASE_URL=http://192.168.18.37:8000
+COOLIFY_BASE_URL=http://127.0.0.1:8000
 COOLIFY_RESOURCE_UUID=<mygram-coolify-application-uuid>
 ```
 
 Store the Coolify API token as a Jenkins secret text credential named `coolify-api-token`. Do not use a stale `coolify-app-uuid` credential unless it actually contains the MyGram application UUID shown in the Coolify application URL.
+
+The Jenkins deploy stage runs the Coolify API call from a temporary `curlimages/curl` container using Docker `--network host`. That is why `COOLIFY_BASE_URL` should normally be `http://127.0.0.1:8000`: the request is made from the Docker host network, not from inside the Jenkins container network.
 
 ## Optional Local Fullstack Docker Test
 
@@ -148,7 +150,7 @@ FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:main
 
 ```bash
 curl --fail --show-error --location --request GET \
-  "http://192.168.18.37:8000/api/v1/deploy?uuid=<mygram-coolify-application-uuid>&force=false" \
+  "http://127.0.0.1:8000/api/v1/deploy?uuid=<mygram-coolify-application-uuid>&force=false" \
   --header "Authorization: Bearer <coolify-api-token>"
 ```
 

@@ -16,7 +16,7 @@ pipeline {
         booleanParam(name: 'CAP_REQUIRED_ON_LOGIN', defaultValue: true, description: 'Require Cap captcha on the login form.')
         string(name: 'GHCR_OWNER_REPO', defaultValue: 'ghcr.io/ffigoperdana/mygram', description: 'Required when PUSH_IMAGES=true, for example ghcr.io/owner/mygram.')
         booleanParam(name: 'DEPLOY_TO_COOLIFY', defaultValue: true, description: 'Trigger Coolify redeploy after pushing main images. Requires Jenkins secret text credential coolify-api-token.')
-        string(name: 'COOLIFY_BASE_URL', defaultValue: 'http://192.168.18.37:8000', description: 'Internal Coolify base URL reachable from Jenkins.')
+        string(name: 'COOLIFY_BASE_URL', defaultValue: 'http://127.0.0.1:8000', description: 'Coolify base URL from the Docker host network used by the deploy trigger.')
         string(name: 'COOLIFY_RESOURCE_UUID', defaultValue: 'elqs1vtmi6hw7afeevjj1vum', description: 'Coolify application/resource UUID for MyGram.')
     }
 
@@ -32,7 +32,7 @@ pipeline {
         DEFAULT_CAP_SITE_KEY = '8d1607b07b'
         DEFAULT_CAP_REQUIRED_ON_LOGIN = 'true'
         DEFAULT_GHCR_OWNER_REPO = 'ghcr.io/ffigoperdana/mygram'
-        DEFAULT_COOLIFY_BASE_URL = 'http://192.168.18.37:8000'
+        DEFAULT_COOLIFY_BASE_URL = 'http://127.0.0.1:8000'
         DEFAULT_COOLIFY_RESOURCE_UUID = 'elqs1vtmi6hw7afeevjj1vum'
     }
 
@@ -239,9 +239,14 @@ pipeline {
                         fi
 
                         COOLIFY_URL="${EFFECTIVE_COOLIFY_BASE_URL%/}"
-                        curl --fail --show-error --location --request GET \
-                          "${COOLIFY_URL}/api/v1/deploy?uuid=${EFFECTIVE_COOLIFY_RESOURCE_UUID}&force=false" \
-                          --header "Authorization: Bearer ${COOLIFY_API_TOKEN}"
+                        COOLIFY_DEPLOY_URL="${COOLIFY_URL}/api/v1/deploy?uuid=${EFFECTIVE_COOLIFY_RESOURCE_UUID}&force=false"
+                        echo "Triggering Coolify deploy at ${COOLIFY_URL} for resource ${EFFECTIVE_COOLIFY_RESOURCE_UUID}"
+                        printf 'header = "Authorization: Bearer %s"\\n' "$COOLIFY_API_TOKEN" | docker run --rm -i --network host curlimages/curl:8.11.1 \
+                          --fail --silent --show-error --location --request GET \
+                          --connect-timeout 10 \
+                          --max-time 30 \
+                          --config - \
+                          "$COOLIFY_DEPLOY_URL"
                     '''
                 }
             }
