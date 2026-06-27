@@ -137,13 +137,13 @@ docker push ghcr.io/<owner>/<repo>-web:${GIT_COMMIT}
 5. Update Coolify environment variables:
 
 ```bash
-BACKEND_IMAGE=ghcr.io/<owner>/<repo>-api:${GIT_COMMIT}
-FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:${GIT_COMMIT}
+BACKEND_IMAGE=ghcr.io/<owner>/<repo>-api:main
+FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:main
 ```
 
 6. Trigger Coolify redeploy using its webhook/API.
 
-For Phase E build verification, leave `PUSH_IMAGES=false` in Jenkins. That mode runs backend checks, frontend checks, backend Docker build, frontend Docker build, and production compose config validation without pushing images or deploying. Turn image push/deploy behavior on later during Phase F.
+For production CI/CD, Jenkins pushes both immutable SHA tags and mutable `:main` tags from the `main` branch. Coolify should use the mutable `:main` image tags so the Jenkins deploy webhook can redeploy the newest images without manually editing Coolify variables.
 
 ## GitHub Actions Role
 
@@ -180,6 +180,14 @@ CAP_BASE_URL=https://cap.fgdev.tech
 CAP_SITE_KEY=<cap-site-key>
 CAP_SECRET_KEY=<cap-secret-key>
 CAP_REQUIRED_ON_LOGIN=true
+BOOTSTRAP_ADMIN_EMAIL=
+BOOTSTRAP_ADMIN_USERNAME=
+BOOTSTRAP_ADMIN_PASSWORD=
+BOOTSTRAP_ADMIN_AGE=21
+BOOTSTRAP_USER_EMAIL=
+BOOTSTRAP_USER_USERNAME=
+BOOTSTRAP_USER_PASSWORD=
+BOOTSTRAP_USER_AGE=18
 S3_ENDPOINT=https://s3.fgdev.tech
 S3_REGION=garage
 S3_BUCKET=fgdev-media
@@ -188,8 +196,8 @@ S3_SECRET_ACCESS_KEY=<garage-secret-key>
 S3_FORCE_PATH_STYLE=true
 S3_PUBLIC_BASE_URL=
 S3_UPLOAD_MAX_MB=5
-BACKEND_IMAGE=ghcr.io/<owner>/<repo>-api:<tag>
-FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:<tag>
+BACKEND_IMAGE=ghcr.io/<owner>/<repo>-api:main
+FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:main
 ```
 
 6. Add domains:

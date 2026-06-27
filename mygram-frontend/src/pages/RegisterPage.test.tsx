@@ -36,7 +36,15 @@ describe("RegisterPage", () => {
     await user.clear(screen.getByLabelText("Age"));
     await user.type(screen.getByLabelText("Age"), "25");
     await user.type(screen.getByLabelText("Password"), "secret123");
-    await user.type(screen.getByLabelText("Captcha"), "cap-token-123");
+    await user.click(screen.getByRole("button", { name: "Verify human" }));
+
+    await waitFor(() => {
+      expect(document.querySelector("cap-widget")).toBeTruthy();
+    });
+    document.querySelector("cap-widget")?.dispatchEvent(
+      new CustomEvent("solve", { detail: { token: "cap-token-123" }, bubbles: true }),
+    );
+    await screen.findByText("Captcha verified");
     await user.click(screen.getByRole("button", { name: "Create account" }));
 
     await waitFor(() => {

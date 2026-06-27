@@ -7,15 +7,15 @@ pipeline {
     }
 
     parameters {
-        booleanParam(name: 'PUSH_IMAGES', defaultValue: false, description: 'Push GHCR images after build checks. Keep false for Phase E.')
+        booleanParam(name: 'PUSH_IMAGES', defaultValue: true, description: 'Push GHCR images after build checks. Only the main branch publishes production images.')
         string(name: 'IMAGE_TAG', defaultValue: '', description: 'Optional image tag. Defaults to git SHA.')
-        string(name: 'PUBLIC_API_BASE_URL', defaultValue: 'https://api.mygram.example.com', description: 'Frontend build-time API URL.')
+        string(name: 'PUBLIC_API_BASE_URL', defaultValue: 'https://api.mygram.fgdev.tech', description: 'Frontend build-time API URL.')
         booleanParam(name: 'CAP_ENABLED', defaultValue: true, description: 'Enable Cap captcha in the production frontend build.')
         string(name: 'CAP_BASE_URL', defaultValue: 'https://cap.fgdev.tech', description: 'Frontend Cap captcha base URL.')
-        string(name: 'CAP_SITE_KEY', defaultValue: '', description: 'Frontend Cap captcha site key. Required when CAP_ENABLED=true.')
+        string(name: 'CAP_SITE_KEY', defaultValue: '8d1607b07b', description: 'Frontend Cap captcha site key. Required when CAP_ENABLED=true.')
         booleanParam(name: 'CAP_REQUIRED_ON_LOGIN', defaultValue: true, description: 'Require Cap captcha on the login form.')
-        string(name: 'GHCR_OWNER_REPO', defaultValue: '', description: 'Required when PUSH_IMAGES=true, for example ghcr.io/owner/mygram.')
-        booleanParam(name: 'DEPLOY_TO_COOLIFY', defaultValue: false, description: 'Trigger the Coolify deploy webhook after pushing images. Requires Jenkins secret text credentials coolify-deploy-webhook-url and coolify-token.')
+        string(name: 'GHCR_OWNER_REPO', defaultValue: 'ghcr.io/ffigoperdana/mygram', description: 'Required when PUSH_IMAGES=true, for example ghcr.io/owner/mygram.')
+        booleanParam(name: 'DEPLOY_TO_COOLIFY', defaultValue: true, description: 'Trigger the Coolify deploy webhook after pushing main images. Requires Jenkins secret text credentials coolify-deploy-webhook-url and coolify-token.')
     }
 
     environment {
@@ -160,7 +160,10 @@ pipeline {
 
         stage('Push Images') {
             when {
-                expression { return params.PUSH_IMAGES }
+                allOf {
+                    branch 'main'
+                    expression { return params.PUSH_IMAGES }
+                }
             }
             steps {
                 script {
@@ -199,6 +202,7 @@ pipeline {
         stage('Trigger Coolify') {
             when {
                 allOf {
+                    branch 'main'
                     expression { return params.PUSH_IMAGES }
                     expression { return params.DEPLOY_TO_COOLIFY }
                 }
@@ -219,7 +223,7 @@ pipeline {
 
     post {
         success {
-            echo "Phase E checks completed. Backend and frontend Dockerfiles built successfully in Jenkins."
+            echo "MyGram pipeline completed. Backend and frontend quality checks passed."
             echo "Effective image tag: ${env.EFFECTIVE_IMAGE_TAG}"
             echo "Mutable production tags: ${env.BACKEND_MAIN_IMAGE ?: 'not pushed'} and ${env.FRONTEND_MAIN_IMAGE ?: 'not pushed'}"
         }
