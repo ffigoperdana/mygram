@@ -92,7 +92,17 @@ func UploadPhotoImage(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		log.Printf("object storage upload failed: %v", err)
+		log.Printf(
+			"object storage upload failed: %v; endpoint=%q region=%q bucket=%q force_path_style=%t public_base_url_set=%t access_key_prefix=%q secret_key_set=%t",
+			err,
+			cfg.S3Endpoint,
+			cfg.S3Region,
+			cfg.S3Bucket,
+			cfg.S3ForcePathStyle,
+			cfg.S3PublicBaseURL != "",
+			accessKeyPrefix(cfg.S3AccessKeyID),
+			cfg.S3SecretAccessKey != "",
+		)
 		jsonError(c, http.StatusBadGateway, "Bad Gateway", "failed to upload image")
 		return
 	}
@@ -139,4 +149,12 @@ func photoUploadObjectKey(userID uint, extension string) (string, error) {
 		hex.EncodeToString(randomBytes),
 		extension,
 	), nil
+}
+
+func accessKeyPrefix(accessKeyID string) string {
+	if len(accessKeyID) <= 6 {
+		return accessKeyID
+	}
+
+	return accessKeyID[:6] + "..."
 }

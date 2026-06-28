@@ -14,9 +14,40 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 var ErrObjectStorageNotConfigured = errors.New("object storage is not configured")
+
+type ObjectStorageUploadError struct {
+	StatusCode int
+	Code       string
+	Message    string
+	Err        error
+}
+
+func (err *ObjectStorageUploadError) Error() string {
+	parts := []string{"upload object failed"}
+	if err.StatusCode != 0 {
+		parts = append(parts, fmt.Sprintf("status=%d", err.StatusCode))
+	}
+	if err.Code != "" {
+		parts = append(parts, "code="+err.Code)
+	}
+	if err.Message != "" {
+		parts = append(parts, fmt.Sprintf("message=%q", err.Message))
+	}
+	if len(parts) > 1 {
+		return strings.Join(parts, " ")
+	}
+
+	return fmt.Sprintf("upload object failed: %v", err.Err)
+}
+
+func (err *ObjectStorageUploadError) Unwrap() error {
+	return err.Err
+}
 
 type ObjectUploadInput struct {
 	Key         string
@@ -67,7 +98,7 @@ func UploadObject(ctx context.Context, cfg appconfig.Config, input ObjectUploadI
 		CacheControl:  aws.String("public, max-age=31536000, immutable"),
 	})
 	if err != nil {
-		return ObjectUploadResult{}, fmt.Errorf("upload object: %w", err)
+		return ObjectUploadResult{}, objectStorageUploadError(err)
 	}
 
 	return ObjectUploadResult{
@@ -77,6 +108,25 @@ func UploadObject(ctx context.Context, cfg appconfig.Config, input ObjectUploadI
 		ContentType: input.ContentType,
 		Size:        input.Size,
 	}, nil
+}
+
+func objectStorageUploadError(err error) error {
+	uploadErr := &ObjectStorageUploadError{
+		Err: err,
+	}
+
+	var responseErr *smithyhttp.ResponseError
+	if errors.As(err, &responseErr) {
+		uploadErr.StatusCode = responseErr.HTTPStatusCode()
+	}
+
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		uploadErr.Code = apiErr.ErrorCode()
+		uploadErr.Message = apiErr.ErrorMessage()
+	}
+
+	return uploadErr
 }
 
 func objectURL(cfg appconfig.Config, key string) string {
