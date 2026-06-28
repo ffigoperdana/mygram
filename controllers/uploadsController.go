@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"time"
@@ -91,6 +92,7 @@ func UploadPhotoImage(c *gin.Context) {
 		return
 	}
 	if err != nil {
+		log.Printf("object storage upload failed: %v", err)
 		jsonError(c, http.StatusBadGateway, "Bad Gateway", "failed to upload image")
 		return
 	}

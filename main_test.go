@@ -124,6 +124,20 @@ func TestSwaggerUICanBeDisabled(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, swaggerResponse.Code)
 }
 
+func TestSwaggerUIAllowsSameOriginEmbedding(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database.SetDB(nil)
+	t.Setenv("PUBLIC_OPENAPI_ENABLED", "true")
+	t.Setenv("SWAGGER_UI_MODE", "public")
+
+	r := router.StartApp()
+
+	swaggerResponse := performJSONRequest(r, http.MethodGet, "/swagger/index.html", nil, "")
+	require.Equal(t, http.StatusOK, swaggerResponse.Code, swaggerResponse.Body.String())
+	assert.Equal(t, "SAMEORIGIN", swaggerResponse.Header().Get("X-Frame-Options"))
+	assert.Contains(t, swaggerResponse.Header().Get("Content-Security-Policy"), "frame-ancestors 'self'")
+}
+
 func TestUserRegistrationLoginAndValidation(t *testing.T) {
 	r := setupDatabaseBackedTest(t)
 
