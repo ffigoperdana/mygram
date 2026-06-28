@@ -138,6 +138,24 @@ func TestSwaggerUIAllowsSameOriginEmbedding(t *testing.T) {
 	assert.Contains(t, swaggerResponse.Header().Get("Content-Security-Policy"), "frame-ancestors 'self'")
 }
 
+func TestMediaProxyRejectsInvalidPathsAndRequiresStorage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database.SetDB(nil)
+	t.Setenv("S3_ENDPOINT", " ")
+	t.Setenv("S3_REGION", " ")
+	t.Setenv("S3_BUCKET", " ")
+	t.Setenv("S3_ACCESS_KEY_ID", " ")
+	t.Setenv("S3_SECRET_ACCESS_KEY", " ")
+
+	r := router.StartApp()
+
+	invalidPathResponse := performJSONRequest(r, http.MethodGet, "/media/users/private.jpg", nil, "")
+	assert.Equal(t, http.StatusNotFound, invalidPathResponse.Code)
+
+	validPathResponse := performJSONRequest(r, http.MethodGet, "/media/uploads/photos/1/photo.jpg", nil, "")
+	assert.Equal(t, http.StatusServiceUnavailable, validPathResponse.Code)
+}
+
 func TestUserRegistrationLoginAndValidation(t *testing.T) {
 	r := setupDatabaseBackedTest(t)
 

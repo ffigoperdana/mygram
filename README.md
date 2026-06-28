@@ -18,6 +18,7 @@ See [TASK.md](TASK.md) for the phased implementation handoff and [DEPLOYMENT.md]
 - Admin dashboard API for stats, user listing, user updates, ban/unban, and delete
 - Photo CRUD with ownership authorization
 - Authenticated image upload to S3-compatible object storage for photo media
+- Same-origin media proxy at `/media/uploads/photos/*` for uploaded images
 - Comment CRUD with ownership authorization
 - Social media link CRUD with ownership authorization
 - Health, liveness, and readiness endpoints
@@ -69,6 +70,7 @@ PUT    /api/v1/photos/:photoId
 DELETE /api/v1/photos/:photoId
 
 POST   /api/v1/uploads/photos
+GET    /media/uploads/photos/*
 
 GET    /api/v1/comments
 GET    /api/v1/comments/:commentId
@@ -126,7 +128,8 @@ S3_BUCKET=fgdev-media
 S3_ACCESS_KEY_ID=replace-with-garage-access-key
 S3_SECRET_ACCESS_KEY=replace-with-garage-secret-key
 S3_FORCE_PATH_STYLE=true
-S3_PUBLIC_BASE_URL=
+# Prefer this in production so images load through the MyGram domain.
+S3_PUBLIC_BASE_URL=https://mygram.example.com/media
 S3_UPLOAD_MAX_MB=5
 
 DB_HOST=localhost

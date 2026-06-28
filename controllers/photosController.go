@@ -209,7 +209,26 @@ func DeletePhoto(c *gin.Context) {
 		return
 	}
 
-	if err := db.Delete(&models.Photo{}, photoID).Error; err != nil {
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("photo_id = ?", photoID).Delete(&models.Comment{}).Error; err != nil {
+			return err
+		}
+
+		result := tx.Delete(&models.Photo{}, photoID)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+
+		return nil
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		jsonError(c, http.StatusNotFound, "Photo Not Found", "photo does not exist")
+		return
+	}
+	if err != nil {
 		jsonError(c, http.StatusBadRequest, "Delete Error", err.Error())
 		return
 	}

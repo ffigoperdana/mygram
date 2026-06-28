@@ -20,15 +20,15 @@ import (
 
 var ErrObjectStorageNotConfigured = errors.New("object storage is not configured")
 
-type ObjectStorageUploadError struct {
+type ObjectStorageError struct {
 	StatusCode int
 	Code       string
 	Message    string
 	Err        error
 }
 
-func (err *ObjectStorageUploadError) Error() string {
-	parts := []string{"upload object failed"}
+func (err *ObjectStorageError) Error() string {
+	parts := []string{"object storage request failed"}
 	if err.StatusCode != 0 {
 		parts = append(parts, fmt.Sprintf("status=%d", err.StatusCode))
 	}
@@ -42,10 +42,10 @@ func (err *ObjectStorageUploadError) Error() string {
 		return strings.Join(parts, " ")
 	}
 
-	return fmt.Sprintf("upload object failed: %v", err.Err)
+	return fmt.Sprintf("object storage request failed: %v", err.Err)
 }
 
-func (err *ObjectStorageUploadError) Unwrap() error {
+func (err *ObjectStorageError) Unwrap() error {
 	return err.Err
 }
 
@@ -64,30 +64,23 @@ type ObjectUploadResult struct {
 	Size        int64
 }
 
+type ObjectDownloadResult struct {
+	Body          io.ReadCloser
+	ContentType   string
+	ContentLength int64
+	CacheControl  string
+	ETag          string
+}
+
 func UploadObject(ctx context.Context, cfg appconfig.Config, input ObjectUploadInput) (ObjectUploadResult, error) {
 	if !cfg.ObjectStorageConfigured() {
 		return ObjectUploadResult{}, ErrObjectStorageNotConfigured
 	}
 
-	awsCfg, err := awsconfig.LoadDefaultConfig(
-		ctx,
-		awsconfig.WithRegion(cfg.S3Region),
-		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			cfg.S3AccessKeyID,
-			cfg.S3SecretAccessKey,
-			"",
-		)),
-	)
+	client, err := newObjectStorageClient(ctx, cfg)
 	if err != nil {
 		return ObjectUploadResult{}, fmt.Errorf("load s3 config: %w", err)
 	}
-
-	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
-		options.BaseEndpoint = aws.String(cfg.S3Endpoint)
-		options.UsePathStyle = cfg.S3ForcePathStyle
-		options.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
-		options.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
-	})
 
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(cfg.S3Bucket),
@@ -98,7 +91,7 @@ func UploadObject(ctx context.Context, cfg appconfig.Config, input ObjectUploadI
 		CacheControl:  aws.String("public, max-age=31536000, immutable"),
 	})
 	if err != nil {
-		return ObjectUploadResult{}, objectStorageUploadError(err)
+		return ObjectUploadResult{}, objectStorageRequestError(err)
 	}
 
 	return ObjectUploadResult{
@@ -110,23 +103,74 @@ func UploadObject(ctx context.Context, cfg appconfig.Config, input ObjectUploadI
 	}, nil
 }
 
-func objectStorageUploadError(err error) error {
-	uploadErr := &ObjectStorageUploadError{
+func GetObject(ctx context.Context, cfg appconfig.Config, key string) (ObjectDownloadResult, error) {
+	if !cfg.ObjectStorageConfigured() {
+		return ObjectDownloadResult{}, ErrObjectStorageNotConfigured
+	}
+
+	client, err := newObjectStorageClient(ctx, cfg)
+	if err != nil {
+		return ObjectDownloadResult{}, fmt.Errorf("load s3 config: %w", err)
+	}
+
+	result, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(cfg.S3Bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return ObjectDownloadResult{}, objectStorageRequestError(err)
+	}
+
+	return ObjectDownloadResult{
+		Body:          result.Body,
+		ContentType:   aws.ToString(result.ContentType),
+		ContentLength: aws.ToInt64(result.ContentLength),
+		CacheControl:  aws.ToString(result.CacheControl),
+		ETag:          aws.ToString(result.ETag),
+	}, nil
+}
+
+func newObjectStorageClient(ctx context.Context, cfg appconfig.Config) (*s3.Client, error) {
+	awsCfg, err := awsconfig.LoadDefaultConfig(
+		ctx,
+		awsconfig.WithRegion(cfg.S3Region),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			cfg.S3AccessKeyID,
+			cfg.S3SecretAccessKey,
+			"",
+		)),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
+		options.BaseEndpoint = aws.String(cfg.S3Endpoint)
+		options.UsePathStyle = cfg.S3ForcePathStyle
+		options.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		options.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+	})
+
+	return client, nil
+}
+
+func objectStorageRequestError(err error) error {
+	storageErr := &ObjectStorageError{
 		Err: err,
 	}
 
 	var responseErr *smithyhttp.ResponseError
 	if errors.As(err, &responseErr) {
-		uploadErr.StatusCode = responseErr.HTTPStatusCode()
+		storageErr.StatusCode = responseErr.HTTPStatusCode()
 	}
 
 	var apiErr smithy.APIError
 	if errors.As(err, &apiErr) {
-		uploadErr.Code = apiErr.ErrorCode()
-		uploadErr.Message = apiErr.ErrorMessage()
+		storageErr.Code = apiErr.ErrorCode()
+		storageErr.Message = apiErr.ErrorMessage()
 	}
 
-	return uploadErr
+	return storageErr
 }
 
 func objectURL(cfg appconfig.Config, key string) string {

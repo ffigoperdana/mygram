@@ -34,6 +34,7 @@ func StartApp() *gin.Engine {
 	r.Use(middlewares.CORS())
 
 	registerHealthRoutes(r)
+	registerMediaRoutes(r)
 	registerLegacyRoutes(r)
 	registerV1Routes(r.Group("/api/v1"))
 	registerDocsRoutes(r, cfg)
@@ -46,6 +47,11 @@ func registerHealthRoutes(r *gin.Engine) {
 	r.GET("/health", controllers.HealthCheck)
 	r.GET("/health/ready", controllers.ReadinessCheck)
 	r.GET("/health/live", controllers.LivenessCheck)
+}
+
+func registerMediaRoutes(r *gin.Engine) {
+	r.GET("/media/*objectKey", controllers.ServeMediaObject)
+	r.HEAD("/media/*objectKey", controllers.ServeMediaObject)
 }
 
 func registerLegacyRoutes(r *gin.Engine) {
