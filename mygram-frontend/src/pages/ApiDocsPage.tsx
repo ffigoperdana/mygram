@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, BookOpen, Copy, ExternalLink, Play } from "lucide-react";
 import { toast } from "sonner";
 
-import { apiBaseUrl } from "@/api/http";
+import { apiDisplayBaseUrl } from "@/api/http";
 import { mygramApi } from "@/api/mygram";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,16 +15,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
-const curlExample = `curl -X POST "${apiBaseUrl}/api/v1/photos" \\
+const curlExample = `curl -X POST "${apiDisplayBaseUrl}/api/v1/photos" \\
   -H "Authorization: Bearer <your-jwt>" \\
   -H "Content-Type: application/json" \\
   -d '{"title":"Morning light","caption":"From the API","photo_url":"https://example.com/photo.jpg"}'`;
 
-const uploadCurlExample = `curl -X POST "${apiBaseUrl}/api/v1/uploads/photos" \\
+const uploadCurlExample = `curl -X POST "${apiDisplayBaseUrl}/api/v1/uploads/photos" \\
   -H "Authorization: Bearer <your-jwt>" \\
   -F "file=@photo.jpg"`;
 
-const fetchExample = `await fetch("${apiBaseUrl}/api/v1/photos", {
+const fetchExample = `await fetch("${apiDisplayBaseUrl}/api/v1/photos", {
   method: "POST",
   headers: {
     Authorization: "Bearer <your-jwt>",
@@ -85,13 +85,13 @@ export function ApiDocsPage() {
           <Card>
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground">API base URL</p>
-              <p className="mt-1 break-all font-medium">{apiBaseUrl}</p>
+              <p className="mt-1 break-all font-medium">{apiDisplayBaseUrl}</p>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className="mt-4"
-                onClick={() => copy(apiBaseUrl)}
+                onClick={() => copy(apiDisplayBaseUrl)}
               >
                 <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
                 Copy URL
@@ -157,7 +157,7 @@ export function ApiDocsPage() {
               ) : null}
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button asChild variant="outline">
-                  <a href={`${apiBaseUrl}/openapi/public.json`} target="_blank" rel="noreferrer">
+                  <a href={`${apiDisplayBaseUrl}/openapi/public.json`} target="_blank" rel="noreferrer">
                     <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
                     Raw JSON
                   </a>
@@ -247,7 +247,7 @@ function TryRequestConsole() {
   const [response, setResponse] = useState("");
   const [isSending, setIsSending] = useState(false);
   const selected = tryRoutes[selectedIndex];
-  const targetUrl = `${apiBaseUrl}${selected.path}`;
+  const targetUrl = `${apiDisplayBaseUrl}${selected.path}`;
 
   function selectRoute(index: number) {
     const nextRoute = tryRoutes[index];

@@ -27,20 +27,22 @@ This is the best fit for a small fullstack MyGram app on a homelab. Split servic
 Use three domains/subdomains:
 
 - Frontend: `https://mygram.example.com`
-- API: `https://api.mygram.example.com`
+- API: same-origin through `https://mygram.example.com/api/*` for the first production stack. A separate `https://api.mygram.example.com` domain is optional once the proxy/TLS route is verified.
 - API docs: `https://docs.mygram.example.com`
 
 In production, set:
 
 ```bash
 CORS_ALLOWED_ORIGINS=https://mygram.example.com,https://docs.mygram.example.com
-PUBLIC_API_BASE_URL=https://api.mygram.example.com
+PUBLIC_API_BASE_URL=
 PUBLIC_DOCS_BASE_URL=https://docs.mygram.example.com
 PUBLIC_OPENAPI_ENABLED=true
 SWAGGER_UI_MODE=public
 ```
 
 Replace the examples with your real Coolify domains.
+
+When `PUBLIC_API_BASE_URL` is empty, the frontend calls `/api/v1/*` on the same origin and the frontend Nginx container proxies API requests to the backend service at `api:8080`. This avoids browser TLS/CORS failures while the separate API subdomain is still being stabilized.
 
 The docs domain should show human-readable user API docs at `/`. If `/swagger` is opened on the docs domain, show Swagger UI backed by `/openapi/public.json`. Do not expose admin endpoints in public Swagger; keep the full/internal OpenAPI available only to trusted developers or behind admin/internal access.
 
@@ -131,7 +133,7 @@ npm run build
 ```bash
 docker build -t ghcr.io/<owner>/<repo>-api:${GIT_COMMIT} .
 docker build \
-  --build-arg VITE_API_BASE_URL=https://api.mygram.example.com \
+  --build-arg VITE_API_BASE_URL= \
   -t ghcr.io/<owner>/<repo>-web:${GIT_COMMIT} \
   ./mygram-frontend
 
@@ -183,7 +185,7 @@ DB_USER=postgres
 DB_PASSWORD=<strong-postgres-password>
 JWT_SECRET=<random-32-plus-character-secret>
 JWT_EXPIRATION_HOURS=24
-CORS_ALLOWED_ORIGINS=https://mygram.example.com
+CORS_ALLOWED_ORIGINS=https://mygram.example.com,https://docs.mygram.example.com
 PUBLIC_OPENAPI_ENABLED=true
 SWAGGER_UI_MODE=public
 CAP_ENABLED=true
@@ -214,7 +216,7 @@ FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:main
 6. Add domains:
 
 - `frontend` service on port `80`: `https://mygram.example.com`
-- `api` service on port `8080`: `https://api.mygram.example.com`
+- `api` service on port `8080`: keep internal for same-origin `/api/*` proxy, or expose `https://api.mygram.example.com` only after the TLS/proxy route is confirmed.
 - `docs` frontend route/service on port `80`: `https://docs.mygram.example.com`
 
 7. Enable HTTPS through Coolify.
@@ -227,9 +229,9 @@ FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:main
 Check these after each deployment:
 
 ```bash
-curl https://api.mygram.example.com/health
-curl https://api.mygram.example.com/health/live
-curl https://api.mygram.example.com/health/ready
+curl https://mygram.example.com/health
+curl https://mygram.example.com/api/v1/photos
+curl https://api.mygram.example.com/health # optional, only if the separate API domain is enabled
 ```
 
 Then verify in browser:

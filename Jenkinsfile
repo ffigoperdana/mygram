@@ -9,7 +9,8 @@ pipeline {
     parameters {
         booleanParam(name: 'PUSH_IMAGES', defaultValue: true, description: 'Push GHCR images after build checks. Only the main branch publishes production images.')
         string(name: 'IMAGE_TAG', defaultValue: '', description: 'Optional image tag. Defaults to git SHA.')
-        string(name: 'PUBLIC_API_BASE_URL', defaultValue: 'https://api.mygram.fgdev.tech', description: 'Frontend build-time API URL.')
+        string(name: 'PUBLIC_API_BASE_URL', defaultValue: '', description: 'Frontend build-time API URL. Leave empty for same-origin /api proxy in production.')
+        booleanParam(name: 'USE_SAME_ORIGIN_API', defaultValue: true, description: 'Use the frontend Nginx /api proxy instead of a separate API subdomain.')
         booleanParam(name: 'CAP_ENABLED', defaultValue: true, description: 'Enable Cap captcha in the production frontend build.')
         string(name: 'CAP_BASE_URL', defaultValue: 'https://cap.fgdev.tech', description: 'Frontend Cap captcha base URL.')
         string(name: 'CAP_SITE_KEY', defaultValue: '8d1607b07b', description: 'Frontend Cap captcha site key. Required when CAP_ENABLED=true.')
@@ -26,7 +27,7 @@ pipeline {
         BACKEND_LOCAL_IMAGE = 'mygram-api:jenkins'
         FRONTEND_LOCAL_IMAGE = 'mygram-web:jenkins'
         CI_JWT_SECRET = 'ci-jwt-secret-that-is-long-enough-for-mygram'
-        DEFAULT_PUBLIC_API_BASE_URL = 'https://api.mygram.fgdev.tech'
+        DEFAULT_PUBLIC_API_BASE_URL = ''
         DEFAULT_CAP_ENABLED = 'true'
         DEFAULT_CAP_BASE_URL = 'https://cap.fgdev.tech'
         DEFAULT_CAP_SITE_KEY = '8d1607b07b'
@@ -43,7 +44,8 @@ pipeline {
                 script {
                     env.GIT_SHORT_SHA = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
                     env.EFFECTIVE_IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.GIT_SHORT_SHA
-                    env.EFFECTIVE_PUBLIC_API_BASE_URL = params.PUBLIC_API_BASE_URL?.trim() ?: env.DEFAULT_PUBLIC_API_BASE_URL
+                    env.EFFECTIVE_USE_SAME_ORIGIN_API = params.USE_SAME_ORIGIN_API == null ? 'true' : params.USE_SAME_ORIGIN_API.toString()
+                    env.EFFECTIVE_PUBLIC_API_BASE_URL = env.EFFECTIVE_USE_SAME_ORIGIN_API == 'true' ? '' : (params.PUBLIC_API_BASE_URL?.trim() ?: env.DEFAULT_PUBLIC_API_BASE_URL)
                     env.EFFECTIVE_CAP_ENABLED = params.CAP_ENABLED == null ? env.DEFAULT_CAP_ENABLED : params.CAP_ENABLED.toString()
                     env.EFFECTIVE_CAP_BASE_URL = params.CAP_BASE_URL?.trim() ?: env.DEFAULT_CAP_BASE_URL
                     env.EFFECTIVE_CAP_SITE_KEY = params.CAP_SITE_KEY?.trim() ?: env.DEFAULT_CAP_SITE_KEY
@@ -100,6 +102,7 @@ pipeline {
                         fi
 
                         VITE_API_BASE_URL="${EFFECTIVE_PUBLIC_API_BASE_URL}" \
+                        VITE_USE_SAME_ORIGIN_API="${EFFECTIVE_USE_SAME_ORIGIN_API}" \
                         VITE_CAP_ENABLED="${EFFECTIVE_CAP_ENABLED}" \
                         VITE_CAP_BASE_URL="${EFFECTIVE_CAP_BASE_URL}" \
                         VITE_CAP_SITE_KEY="${EFFECTIVE_CAP_SITE_KEY}" \
@@ -121,6 +124,7 @@ pipeline {
 
                     docker build \
                       --build-arg VITE_API_BASE_URL="${EFFECTIVE_PUBLIC_API_BASE_URL}" \
+                      --build-arg VITE_USE_SAME_ORIGIN_API="${EFFECTIVE_USE_SAME_ORIGIN_API}" \
                       --build-arg VITE_CAP_ENABLED="${EFFECTIVE_CAP_ENABLED}" \
                       --build-arg VITE_CAP_BASE_URL="${EFFECTIVE_CAP_BASE_URL}" \
                       --build-arg VITE_CAP_SITE_KEY="${EFFECTIVE_CAP_SITE_KEY}" \

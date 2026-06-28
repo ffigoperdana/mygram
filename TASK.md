@@ -169,7 +169,7 @@ Acceptance: pushing to main triggers Jenkins, pushes both images to GHCR, and Co
 - [ ] G1. Create or update the Coolify project for `mygram-fullstack`.
 - [ ] G2. Use `docker-compose.prod.yml` as the deployment compose file.
 - [ ] G3. Configure frontend domain, for example `https://mygram.example.com`.
-- [ ] G4. Configure API domain, for example `https://api.mygram.example.com`.
+- [ ] G4. Configure API access. Prefer same-origin `https://mygram.example.com/api/*` through the frontend Nginx proxy for the first production stack; add `https://api.mygram.example.com` only after its TLS/proxy route is verified.
 - [ ] G5. Configure docs domain, for example `https://docs.mygram.example.com`. Route `/` to the human-readable API docs and `/swagger` to the public user-only Swagger UI.
 - [ ] G6. Set `CORS_ALLOWED_ORIGINS` to include the frontend domain and docs domain if the docs site includes a safe "Try request" console.
 - [ ] G7. Set Cap captcha production env values: `CAP_ENABLED=true`, `CAP_BASE_URL=https://cap.fgdev.tech`, `CAP_SITE_KEY`, `CAP_SECRET_KEY`, and `CAP_REQUIRED_ON_LOGIN` according to the chosen login friction.

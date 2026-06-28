@@ -1,13 +1,13 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 
-import { apiBaseUrl } from "@/api/http";
+import { apiDisplayBaseUrl } from "@/api/http";
 import { Button } from "@/components/ui/button";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 
 export function DocsSwaggerPage() {
   useDocumentTitle("Swagger | MyGram");
-  const swaggerUrl = `${apiBaseUrl}/swagger/index.html`;
+  const swaggerUrl = `${apiDisplayBaseUrl}/swagger/index.html`;
 
   return (
     <main className="min-h-screen bg-background">

@@ -3,7 +3,14 @@ import axios, { AxiosError } from "axios";
 import type { ApiErrorBody } from "@/api/types";
 import { useAuthStore } from "@/stores/auth-store";
 
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const useSameOriginApi = import.meta.env.VITE_USE_SAME_ORIGIN_API === "true";
+const configuredApiBaseUrl = useSameOriginApi
+  ? ""
+  : (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+export const apiBaseUrl = configuredApiBaseUrl;
+export const apiDisplayBaseUrl =
+  configuredApiBaseUrl || (typeof window !== "undefined" ? window.location.origin : "");
 
 export const http = axios.create({
   baseURL: apiBaseUrl,
