@@ -37,6 +37,7 @@ func StartApp() *gin.Engine {
 	registerLegacyRoutes(r)
 	registerV1Routes(r.Group("/api/v1"))
 	registerDocsRoutes(r, cfg)
+	//testing
 
 	return r
 }
