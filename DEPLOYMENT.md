@@ -70,7 +70,7 @@ S3_ACCESS_KEY_ID=<garage-access-key>
 S3_SECRET_ACCESS_KEY=<garage-secret-key>
 S3_FORCE_PATH_STYLE=true
 S3_PUBLIC_BASE_URL=https://mygram.example.com/media
-S3_UPLOAD_MAX_MB=5
+S3_UPLOAD_MAX_MB=4
 ```
 
 For Jenkins:
@@ -208,7 +208,7 @@ S3_ACCESS_KEY_ID=<garage-access-key>
 S3_SECRET_ACCESS_KEY=<garage-secret-key>
 S3_FORCE_PATH_STYLE=true
 S3_PUBLIC_BASE_URL=https://mygram.example.com/media
-S3_UPLOAD_MAX_MB=5
+S3_UPLOAD_MAX_MB=4
 BACKEND_IMAGE=ghcr.io/<owner>/<repo>-api:main
 FRONTEND_IMAGE=ghcr.io/<owner>/<repo>-web:main
 ```

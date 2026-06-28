@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const maxImageUploadBytes = 4 * 1024 * 1024;
+const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+
 type ImageUploadFieldProps = {
   idPrefix: string;
   imageUrl: string;
@@ -41,7 +44,32 @@ export function ImageUploadField({
   }, [imageFile]);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    onImageFileChange(event.target.files?.[0] ?? null);
+    const input = event.currentTarget;
+    const file = event.target.files?.[0] ?? null;
+    input.setCustomValidity("");
+
+    if (!file) {
+      onImageFileChange(null);
+      return;
+    }
+
+    if (!allowedImageTypes.has(file.type)) {
+      input.setCustomValidity("Upload a JPG, PNG, GIF, or WebP image.");
+      input.reportValidity();
+      input.value = "";
+      onImageFileChange(null);
+      return;
+    }
+
+    if (file.size > maxImageUploadBytes) {
+      input.setCustomValidity("Image must be 4 MB or smaller.");
+      input.reportValidity();
+      input.value = "";
+      onImageFileChange(null);
+      return;
+    }
+
+    onImageFileChange(file);
   }
 
   function clearSelectedFile() {
@@ -70,7 +98,7 @@ export function ImageUploadField({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <Label htmlFor={`${idPrefix}-file`}>Image file</Label>
-            <p className="mt-1 text-xs text-muted-foreground">JPG, PNG, GIF, or WebP up to 5MB.</p>
+            <p className="mt-1 text-xs text-muted-foreground">JPG, PNG, GIF, or WebP up to 4MB.</p>
           </div>
           {imageFile ? (
             <Button

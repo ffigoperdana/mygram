@@ -74,7 +74,7 @@ func Load() Config {
 		S3SecretAccessKey:      env("S3_SECRET_ACCESS_KEY", ""),
 		S3ForcePathStyle:       envBool("S3_FORCE_PATH_STYLE", true),
 		S3PublicBaseURL:        strings.TrimRight(env("S3_PUBLIC_BASE_URL", ""), "/"),
-		S3UploadMaxBytes:       int64(envInt("S3_UPLOAD_MAX_MB", 5)) * 1024 * 1024,
+		S3UploadMaxBytes:       int64(envInt("S3_UPLOAD_MAX_MB", 4)) * 1024 * 1024,
 		BootstrapAdminEmail:    env("BOOTSTRAP_ADMIN_EMAIL", ""),
 		BootstrapAdminUsername: env("BOOTSTRAP_ADMIN_USERNAME", ""),
 		BootstrapAdminPassword: env("BOOTSTRAP_ADMIN_PASSWORD", ""),

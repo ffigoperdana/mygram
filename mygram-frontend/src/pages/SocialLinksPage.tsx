@@ -15,6 +15,10 @@ import {
   useSocialMediaLinks,
   useUpdateSocialMediaLink,
 } from "@/hooks/use-social-media";
+import {
+  supportedSocialPlatforms,
+  validateSocialProfileInput,
+} from "@/lib/social-links";
 
 export function SocialLinksPage() {
   useDocumentTitle("Social Links | MyGram");
@@ -25,6 +29,11 @@ export function SocialLinksPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const urlInput = event.currentTarget.elements.namedItem("social-url");
+    if (urlInput instanceof HTMLInputElement && !validateSocialProfileInput(urlInput)) {
+      return;
+    }
 
     try {
       await createLink.mutateAsync({
@@ -53,6 +62,7 @@ export function SocialLinksPage() {
                 id="social-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
+                maxLength={80}
                 required
               />
             </div>
@@ -60,14 +70,22 @@ export function SocialLinksPage() {
               <Label htmlFor="social-url">URL</Label>
               <Input
                 id="social-url"
+                name="social-url"
                 type="url"
                 inputMode="url"
                 pattern="https?://.+"
-                title="Use an http:// or https:// URL."
+                title={`Use a direct profile or channel URL from ${supportedSocialPlatforms}.`}
                 value={url}
-                onChange={(event) => setUrl(event.target.value)}
+                onChange={(event) => {
+                  event.target.setCustomValidity("");
+                  setUrl(event.target.value);
+                }}
+                maxLength={300}
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Direct profile/channel only: {supportedSocialPlatforms}.
+              </p>
             </div>
             <Button type="submit" disabled={createLink.isPending}>
               {createLink.isPending ? "Saving" : "Save link"}
@@ -106,6 +124,11 @@ function SocialLinkItem({ link }: { link: SocialMedia }) {
   async function handleUpdate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    const urlInput = event.currentTarget.elements.namedItem("social-url");
+    if (urlInput instanceof HTMLInputElement && !validateSocialProfileInput(urlInput)) {
+      return;
+    }
+
     try {
       await updateLink.mutateAsync({
         socialMediaId: link.id,
@@ -138,18 +161,27 @@ function SocialLinkItem({ link }: { link: SocialMedia }) {
           value={name}
           onChange={(event) => setName(event.target.value)}
           aria-label="Social link name"
+          maxLength={80}
           required
         />
         <Input
+          name="social-url"
           type="url"
           inputMode="url"
           pattern="https?://.+"
-          title="Use an http:// or https:// URL."
+          title={`Use a direct profile or channel URL from ${supportedSocialPlatforms}.`}
           value={url}
-          onChange={(event) => setUrl(event.target.value)}
+          onChange={(event) => {
+            event.target.setCustomValidity("");
+            setUrl(event.target.value);
+          }}
           aria-label="Social link URL"
+          maxLength={300}
           required
         />
+        <p className="text-xs text-muted-foreground">
+          Direct profile/channel only: {supportedSocialPlatforms}.
+        </p>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" size="sm" disabled={updateLink.isPending}>
             Save

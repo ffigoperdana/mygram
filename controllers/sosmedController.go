@@ -40,7 +40,7 @@ func CreateSocialMedia(c *gin.Context) {
 		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
 		return
 	}
-	if err := helpers.ValidateHTTPURL(socialMedia.SocialMediaURL); err != nil {
+	if err := helpers.ValidateSocialProfileURL(socialMedia.SocialMediaURL); err != nil {
 		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
 		return
 	}
@@ -158,7 +158,7 @@ func UpdateSocialMedia(c *gin.Context) {
 		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
 		return
 	}
-	if err := helpers.ValidateHTTPURL(socialMedia.SocialMediaURL); err != nil {
+	if err := helpers.ValidateSocialProfileURL(socialMedia.SocialMediaURL); err != nil {
 		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
 		return
 	}

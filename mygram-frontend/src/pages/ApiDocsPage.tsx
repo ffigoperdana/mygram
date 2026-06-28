@@ -231,8 +231,8 @@ const tryRoutes: TryRoute[] = [
     path: "/api/v1/social-media",
     body: JSON.stringify(
       {
-        name: "Portfolio",
-        social_media_url: "https://example.com",
+        name: "GitHub",
+        social_media_url: "https://github.com/mygram_user",
       },
       null,
       2,

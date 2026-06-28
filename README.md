@@ -130,7 +130,7 @@ S3_SECRET_ACCESS_KEY=replace-with-garage-secret-key
 S3_FORCE_PATH_STYLE=true
 # Prefer this in production so images load through the MyGram domain.
 S3_PUBLIC_BASE_URL=https://mygram.example.com/media
-S3_UPLOAD_MAX_MB=5
+S3_UPLOAD_MAX_MB=4
 
 DB_HOST=localhost
 DB_USER=postgres

@@ -93,8 +93,8 @@ async function mockApi(page: Page, profile: MockProfile = "anonymous") {
   const socialLinks = [
     {
       id: 1,
-      name: "Website",
-      social_media_url: "https://example.com",
+      name: "GitHub",
+      social_media_url: "https://github.com/example",
       user_id: 2,
     },
   ];

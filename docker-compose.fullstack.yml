@@ -47,7 +47,7 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
-      S3_UPLOAD_MAX_MB: ${S3_UPLOAD_MAX_MB:-5}
+      S3_UPLOAD_MAX_MB: ${S3_UPLOAD_MAX_MB:-4}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:

@@ -487,6 +487,18 @@ func TestSocialMediaEndpointsAndOwnership(t *testing.T) {
 	}, ownerToken)
 	assert.Equal(t, http.StatusBadRequest, javascriptURLResponse.Code)
 
+	searchURLResponse := performJSONRequest(r, http.MethodPost, "/socialmedia/create", map[string]interface{}{
+		"name":             "TikTok search",
+		"social_media_url": "https://www.tiktok.com/search?q=robby%20pantjoro",
+	}, ownerToken)
+	assert.Equal(t, http.StatusBadRequest, searchURLResponse.Code)
+
+	genericURLResponse := performJSONRequest(r, http.MethodPost, "/socialmedia/create", map[string]interface{}{
+		"name":             "Generic site",
+		"social_media_url": "https://example.com",
+	}, ownerToken)
+	assert.Equal(t, http.StatusBadRequest, genericURLResponse.Code)
+
 	listResponse := performJSONRequest(r, http.MethodGet, "/socialmedia/getall", nil, ownerToken)
 	require.Equal(t, http.StatusOK, listResponse.Code)
 	var socialMedias []models.SocialMedia
@@ -500,11 +512,11 @@ func TestSocialMediaEndpointsAndOwnership(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, otherUpdateResponse.Code)
 
 	ownerUpdateResponse := performJSONRequest(r, http.MethodPut, fmt.Sprintf("/socialmedia/update/%d", socialMedia.ID), map[string]interface{}{
-		"name":             "Portfolio",
-		"social_media_url": "https://example.com",
+		"name":             "LinkedIn",
+		"social_media_url": "https://linkedin.com/in/example",
 	}, ownerToken)
 	require.Equal(t, http.StatusOK, ownerUpdateResponse.Code)
-	assert.Contains(t, ownerUpdateResponse.Body.String(), "Portfolio")
+	assert.Contains(t, ownerUpdateResponse.Body.String(), "LinkedIn")
 
 	ownerDeleteResponse := performJSONRequest(r, http.MethodDelete, fmt.Sprintf("/socialmedia/delete/%d", socialMedia.ID), nil, ownerToken)
 	assert.Equal(t, http.StatusOK, ownerDeleteResponse.Code)

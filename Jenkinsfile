@@ -165,7 +165,7 @@ pipeline {
                     S3_ACCESS_KEY_ID=jenkins-access-key \
                     S3_SECRET_ACCESS_KEY=jenkins-secret-key \
                     S3_FORCE_PATH_STYLE=true \
-                    S3_UPLOAD_MAX_MB=5 \
+                    S3_UPLOAD_MAX_MB=4 \
                     $COMPOSE -f docker-compose.prod.yml config
 
                     JWT_SECRET="${CI_JWT_SECRET}" \

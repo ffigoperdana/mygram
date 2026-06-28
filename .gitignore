@@ -40,3 +40,8 @@ mygram-frontend/.tmp/
 mygram-frontend/.env
 mygram-frontend/.env.*
 !mygram-frontend/.env.example
+
+TASK.md
+PORTFOLIO-SCREENSHOTS.md
+FIXES.md
+DEPLOYMENT.md
