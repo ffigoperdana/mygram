@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -70,7 +71,28 @@ func VerifyCaptchaToken(cfg config.Config, token string) error {
 	defer response.Body.Close()
 
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("%w: status %d", ErrCaptchaUnavailable, response.StatusCode)
+		detail := captchaErrorDetail(response)
+		switch response.StatusCode {
+		case http.StatusBadRequest:
+			if detail == "" {
+				return fmt.Errorf("%w: status %d", ErrCaptchaFailed, response.StatusCode)
+			}
+			return fmt.Errorf("%w: %s", ErrCaptchaFailed, detail)
+		case http.StatusUnauthorized, http.StatusForbidden:
+			if detail == "" {
+				detail = fmt.Sprintf("status %d", response.StatusCode)
+			}
+			return fmt.Errorf(
+				"%w: captcha verification was rejected (%s). check CAP_SITE_KEY, CAP_SECRET_KEY, CAP_BASE_URL, or WAF allowlist",
+				ErrCaptchaNotConfigured,
+				detail,
+			)
+		default:
+			if detail == "" {
+				return fmt.Errorf("%w: status %d", ErrCaptchaUnavailable, response.StatusCode)
+			}
+			return fmt.Errorf("%w: status %d: %s", ErrCaptchaUnavailable, response.StatusCode, detail)
+		}
 	}
 
 	result := captchaVerifyResponse{}
@@ -82,6 +104,31 @@ func VerifyCaptchaToken(cfg config.Config, token string) error {
 		return nil
 	}
 
+	reason := captchaFailureReason(result)
+	if reason == "" {
+		return ErrCaptchaFailed
+	}
+
+	return fmt.Errorf("%w: %s", ErrCaptchaFailed, reason)
+}
+
+func captchaErrorDetail(response *http.Response) string {
+	body, err := io.ReadAll(io.LimitReader(response.Body, 1024))
+	if err != nil || len(body) == 0 {
+		return ""
+	}
+
+	result := captchaVerifyResponse{}
+	if err := json.Unmarshal(body, &result); err == nil {
+		if reason := captchaFailureReason(result); reason != "" {
+			return reason
+		}
+	}
+
+	return compactCaptchaDetail(string(body))
+}
+
+func captchaFailureReason(result captchaVerifyResponse) string {
 	reason := strings.TrimSpace(result.Message)
 	if reason == "" {
 		reason = strings.TrimSpace(result.Error)
@@ -89,9 +136,13 @@ func VerifyCaptchaToken(cfg config.Config, token string) error {
 	if reason == "" && len(result.Errors) > 0 {
 		reason = strings.Join(result.Errors, ", ")
 	}
-	if reason == "" {
-		return ErrCaptchaFailed
-	}
+	return compactCaptchaDetail(reason)
+}
 
-	return fmt.Errorf("%w: %s", ErrCaptchaFailed, reason)
+func compactCaptchaDetail(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if len(value) > 180 {
+		return value[:180] + "..."
+	}
+	return value
 }
