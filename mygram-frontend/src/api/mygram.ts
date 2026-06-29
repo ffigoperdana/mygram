@@ -16,6 +16,8 @@ import type {
   Photo,
   PhotoPayload,
   ProfileUpdatePayload,
+  PushSubscriptionPayload,
+  PushVapidPublicKeyResponse,
   PublicOpenAPISpec,
   RegisterPayload,
   SocialMedia,
@@ -92,6 +94,23 @@ export const mygramApi = {
 
   deletePhoto: async (photoId: number) => {
     await http.delete(`/api/v1/photos/${photoId}`);
+  },
+
+  getPushVapidPublicKey: async () => {
+    const response = await http.get<PushVapidPublicKeyResponse>(
+      "/api/v1/push/vapid-public-key",
+    );
+    return response.data;
+  },
+
+  savePushSubscription: async (payload: PushSubscriptionPayload) => {
+    await http.post("/api/v1/push/subscriptions", payload);
+  },
+
+  deletePushSubscription: async (endpoint: string) => {
+    await http.delete("/api/v1/push/subscriptions", {
+      data: { endpoint },
+    });
   },
 
   listComments: () => emptyListOn404<Comment>(http.get("/api/v1/comments")),

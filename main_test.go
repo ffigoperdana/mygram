@@ -341,6 +341,48 @@ func TestCurrentUserAndAdminRBAC(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, deletedGetResponse.Code)
 }
 
+func TestPushSubscriptionRoutes(t *testing.T) {
+	r := setupDatabaseBackedTest(t)
+	userID, token := createUserAndToken(t, r, "push-user", "push@example.com")
+
+	disabledResponse := performJSONRequest(r, http.MethodGet, "/api/v1/push/vapid-public-key", nil, token)
+	require.Equal(t, http.StatusOK, disabledResponse.Code, disabledResponse.Body.String())
+	assert.Contains(t, disabledResponse.Body.String(), `"enabled":false`)
+
+	t.Setenv("PUSH_NOTIFICATIONS_ENABLED", "true")
+	t.Setenv("VAPID_PUBLIC_KEY", "test-public-key")
+	t.Setenv("VAPID_PRIVATE_KEY", "test-private-key")
+	t.Setenv("VAPID_SUBJECT", "mailto:test@example.com")
+
+	keyResponse := performJSONRequest(r, http.MethodGet, "/api/v1/push/vapid-public-key", nil, token)
+	require.Equal(t, http.StatusOK, keyResponse.Code, keyResponse.Body.String())
+	assert.Contains(t, keyResponse.Body.String(), `"enabled":true`)
+	assert.Contains(t, keyResponse.Body.String(), `"public_key":"test-public-key"`)
+
+	endpoint := "https://updates.push.services.mozilla.com/wpush/v2/test"
+	saveResponse := performJSONRequest(r, http.MethodPost, "/api/v1/push/subscriptions", map[string]interface{}{
+		"endpoint": endpoint,
+		"keys": map[string]interface{}{
+			"p256dh": "p256dh-key",
+			"auth":   "auth-key",
+		},
+		"user_agent": "go-test",
+	}, token)
+	require.Equal(t, http.StatusCreated, saveResponse.Code, saveResponse.Body.String())
+
+	var count int64
+	require.NoError(t, database.GetDB().Model(&models.PushSubscription{}).Where("user_id = ?", userID).Count(&count).Error)
+	assert.Equal(t, int64(1), count)
+
+	deleteResponse := performJSONRequest(r, http.MethodDelete, "/api/v1/push/subscriptions", map[string]interface{}{
+		"endpoint": endpoint,
+	}, token)
+	require.Equal(t, http.StatusOK, deleteResponse.Code, deleteResponse.Body.String())
+
+	require.NoError(t, database.GetDB().Model(&models.PushSubscription{}).Where("user_id = ?", userID).Count(&count).Error)
+	assert.Equal(t, int64(0), count)
+}
+
 func TestPhotoEndpointsAndOwnership(t *testing.T) {
 	r := setupDatabaseBackedTest(t)
 	_, ownerToken := createUserAndToken(t, r, "owner", "owner@example.com")
@@ -565,6 +607,10 @@ func configureTestEnv(t *testing.T) {
 	t.Setenv("S3_SECRET_ACCESS_KEY", " ")
 	t.Setenv("S3_FORCE_PATH_STYLE", "true")
 	t.Setenv("S3_UPLOAD_MAX_MB", "5")
+	t.Setenv("PUSH_NOTIFICATIONS_ENABLED", "false")
+	t.Setenv("VAPID_PUBLIC_KEY", "")
+	t.Setenv("VAPID_PRIVATE_KEY", "")
+	t.Setenv("VAPID_SUBJECT", "mailto:test@example.com")
 	t.Setenv("DB_HOST", "localhost")
 	t.Setenv("DB_USER", "postgres")
 	t.Setenv("DB_PASSWORD", "admin")
@@ -579,6 +625,7 @@ func resetTestDatabase(t *testing.T) {
 	require.NotNil(t, db)
 
 	require.NoError(t, db.Migrator().DropTable(
+		&models.PushSubscription{},
 		&models.Comment{},
 		&models.Photo{},
 		&models.SocialMedia{},
@@ -589,6 +636,7 @@ func resetTestDatabase(t *testing.T) {
 		&models.Photo{},
 		&models.Comment{},
 		&models.SocialMedia{},
+		&models.PushSubscription{},
 	))
 }
 

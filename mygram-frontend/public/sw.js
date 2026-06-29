@@ -45,3 +45,66 @@ self.addEventListener("fetch", (event) => {
     caches.match(request).then((cached) => cached ?? fetch(request)),
   );
 });
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "MYGRAM_NOTIFICATION") {
+    return;
+  }
+
+  const payload = event.data.payload ?? {};
+  event.waitUntil(
+    self.registration.showNotification(payload.title ?? "MyGram", {
+      body: payload.body ?? "",
+      icon: "/icons/mygram-icon-192.png",
+      badge: "/icons/mygram-icon-192.png",
+      tag: payload.tag,
+      data: {
+        url: payload.url ?? "/feed",
+      },
+    }),
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch {
+      payload = {
+        body: event.data.text(),
+      };
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title ?? "MyGram", {
+      body: payload.body ?? "",
+      icon: "/icons/mygram-icon-192.png",
+      badge: "/icons/mygram-icon-192.png",
+      tag: payload.tag ?? "mygram-notification",
+      data: {
+        url: payload.url ?? "/feed",
+      },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url ?? "/feed";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const targetUrl = new URL(url, self.location.origin).href;
+      const matchingClient = clients.find((client) => client.url === targetUrl);
+
+      if (matchingClient) {
+        return matchingClient.focus();
+      }
+
+      return self.clients.openWindow(targetUrl);
+    }),
+  );
+});

@@ -123,6 +123,14 @@ func registerV1Routes(api *gin.RouterGroup) {
 		uploadRouter.POST("/photos", controllers.UploadPhotoImage)
 	}
 
+	pushRouter := api.Group("/push")
+	{
+		pushRouter.Use(middlewares.Authentication())
+		pushRouter.GET("/vapid-public-key", controllers.GetPushVAPIDPublicKey)
+		pushRouter.POST("/subscriptions", controllers.SavePushSubscription)
+		pushRouter.DELETE("/subscriptions", controllers.DeletePushSubscription)
+	}
+
 	commentRouter := api.Group("/comments")
 	{
 		commentRouter.Use(middlewares.Authentication())

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"finalproject/helpers"
 	"finalproject/models"
+	"finalproject/services"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -44,7 +45,7 @@ func CreateComment(c *gin.Context) {
 	}
 
 	photo := models.Photo{}
-	if err := db.Select("id").First(&photo, photoID).Error; err != nil {
+	if err := db.Select("id", "user_id", "title").First(&photo, photoID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			jsonError(c, http.StatusNotFound, "Photo Not Found", "photo does not exist, failed to create comment")
 			return
@@ -66,6 +67,8 @@ func CreateComment(c *gin.Context) {
 		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
 		return
 	}
+
+	go services.NotifyNewComment(db, photo, comment)
 
 	c.JSON(http.StatusCreated, comment)
 }

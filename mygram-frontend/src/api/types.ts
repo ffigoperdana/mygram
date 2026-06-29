@@ -78,6 +78,20 @@ export type UploadPhotoResponse = {
   size: number;
 };
 
+export type PushVapidPublicKeyResponse = {
+  enabled: boolean;
+  public_key?: string;
+};
+
+export type PushSubscriptionPayload = {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  user_agent?: string;
+};
+
 export type Comment = {
   id: number;
   message: string;

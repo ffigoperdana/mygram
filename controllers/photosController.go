@@ -4,6 +4,7 @@ import (
 	"errors"
 	"finalproject/helpers"
 	"finalproject/models"
+	"finalproject/services"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -50,6 +51,8 @@ func CreatePhoto(c *gin.Context) {
 		jsonError(c, http.StatusBadRequest, "Bad Request", err.Error())
 		return
 	}
+
+	go services.NotifyNewPhoto(db, photo)
 
 	c.JSON(http.StatusCreated, photo)
 }

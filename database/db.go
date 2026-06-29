@@ -36,7 +36,7 @@ func StartDB() error {
 		conn = conn.Debug()
 	}
 
-	if err := conn.AutoMigrate(models.User{}, models.Photo{}, models.Comment{}, models.SocialMedia{}); err != nil {
+	if err := conn.AutoMigrate(models.User{}, models.Photo{}, models.Comment{}, models.SocialMedia{}, models.PushSubscription{}); err != nil {
 		return fmt.Errorf("migrate database: %w", err)
 	}
 

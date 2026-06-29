@@ -11,6 +11,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PWANotificationButton } from "@/components/pwa/PWANotificationButton";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { useAuthStore } from "@/stores/auth-store";
@@ -66,6 +67,7 @@ export function AppShell() {
               </div>
               <p className="max-w-48 truncate text-muted-foreground">{user?.email}</p>
             </div>
+            <PWANotificationButton />
             <Button variant="outline" size="icon" onClick={handleLogout} aria-label="Log out">
               <LogOut className="h-4 w-4" aria-hidden="true" />
             </Button>
