@@ -359,7 +359,7 @@ export function ApiDocsPage() {
                   </p>
                   <div className="max-h-56 overflow-auto rounded-md border bg-background p-3">
                     {endpoints.map((endpoint) => (
-                      <p key={endpoint} className="font-mono text-xs leading-6">
+                      <p key={endpoint} className="whitespace-nowrap font-mono text-xs leading-6">
                         {endpoint}
                       </p>
                     ))}
@@ -622,11 +622,13 @@ function Example({
 
 function Endpoint({ method, path }: { method: string; path: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-md border bg-background px-3 py-2">
-      <span className="min-w-20 rounded bg-muted px-2 py-1 text-center font-mono text-xs">
-        {method}
-      </span>
-      <span className="font-mono text-xs">{path}</span>
+    <div className="min-w-0 overflow-x-auto rounded-md border bg-background">
+      <div className="flex min-w-max items-center gap-3 px-3 py-2">
+        <span className="w-28 shrink-0 rounded bg-muted px-2 py-1 text-center font-mono text-xs">
+          {method}
+        </span>
+        <span className="whitespace-nowrap font-mono text-xs">{path}</span>
+      </div>
     </div>
   );
 }

@@ -68,6 +68,8 @@ export default function App() {
           <Route path="/docs" element={<ApiDocsPage />} />
           <Route path="/docs/swagger" element={<DocsSwaggerPage />} />
           <Route path="/swagger" element={<DocsSwaggerPage />} />
+          <Route path="/swagger/" element={<DocsSwaggerPage />} />
+          <Route path="/swagger/index.html" element={<DocsSwaggerPage />} />
 
           <Route element={<GuestRoute />}>
             <Route path="/login" element={<LoginPage />} />
