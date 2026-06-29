@@ -19,6 +19,7 @@ const configuredCapBaseUrl = import.meta.env.VITE_CAP_BASE_URL as string | undef
 const configuredCapSiteKey = import.meta.env.VITE_CAP_SITE_KEY as string | undefined;
 const capBaseUrl = (configuredCapBaseUrl || "https://cap.fgdev.tech").replace(/\/$/, "");
 const capSiteKey = configuredCapSiteKey?.trim() || "<mygram-site-key>";
+const capTokenScreenshotSrc = "/docs/cap-token-response.png";
 
 const registerCurlExample = `curl -X POST "${apiDisplayBaseUrl}/api/v1/auth/register" \\
   -H "Content-Type: application/json" \\
@@ -261,6 +262,20 @@ export function ApiDocsPage() {
                 The captcha token is short-lived and should not be stored as a user secret.
                 It only proves that a single auth request passed the human check.
               </p>
+              <figure className="overflow-hidden rounded-md border bg-muted/30">
+                <img
+                  src={capTokenScreenshotSrc}
+                  alt="Cap redeem network response showing success, token, and expires fields"
+                  className="w-full"
+                  loading="lazy"
+                />
+                <figcaption className="border-t px-3 py-2 text-xs text-muted-foreground">
+                  After <code>cap.solve()</code>, Cap returns <code>success</code>,{" "}
+                  <code>token</code>, and <code>expires</code>. Send the returned token as{" "}
+                  <code>captcha_token</code>. The token in this screenshot is intentionally
+                  redacted and you dont need to input username and passowrd, just verify and see for the token in network tab.
+                </figcaption>
+              </figure>
             </CardContent>
           </Card>
 
@@ -296,7 +311,7 @@ export function ApiDocsPage() {
         <section className="grid min-w-0 gap-4 lg:grid-cols-2">
           <Example title="cURL register" value={registerCurlExample} onCopy={copy} />
           <Example title="cURL login" value={loginCurlExample} onCopy={copy} />
-          <Example title="Cap token in browser" value={captchaTokenExample} onCopy={copy} />
+          <Example title="Cap token with cap-widget" value={captchaTokenExample} onCopy={copy} />
           <Example
             title="Cap redeem response"
             value={captchaRedeemResponseExample}
