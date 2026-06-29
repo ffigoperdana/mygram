@@ -43,6 +43,12 @@ if (!result.success || !result.token) {
 
 const captchaToken = result.token;`;
 
+const captchaRedeemResponseExample = `{
+  "success": true,
+  "token": "<captcha-token-from-cap>",
+  "expires": 1782720743860
+}`;
+
 const loginResponseExample = `{
   "token": "<jwt>",
   "user": {
@@ -231,9 +237,71 @@ export function ApiDocsPage() {
         </section>
 
         <section className="grid min-w-0 gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Captcha token flow</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                The browser must solve the Cap challenge first. When Cap returns
+                <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">
+                  success: true
+                </code>
+                , send the returned
+                <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">
+                  token
+                </code>
+                as
+                <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">
+                  captcha_token
+                </code>
+                in register or login requests.
+              </p>
+              <p>
+                The captcha token is short-lived and should not be stored as a user secret.
+                It only proves that a single auth request passed the human check.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Push notifications</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                MyGram uses the Web Push API, VAPID, and a Service Worker. It does not use
+                SMTP or email notifications.
+              </p>
+              <p>
+                The frontend fetches the VAPID public key from
+                <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">
+                  /api/v1/push/vapid-public-key
+                </code>
+                , then stores the browser subscription at
+                <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">
+                  /api/v1/push/subscriptions
+                </code>
+                . The backend only sends push messages to saved subscriptions.
+              </p>
+              <p>
+                Android Chrome and desktop browsers can receive notifications after the
+                user clicks the notification button and grants permission. On iOS, Web Push
+                works only after MyGram is installed as a PWA and notifications are allowed.
+              </p>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid min-w-0 gap-4 lg:grid-cols-2">
           <Example title="cURL register" value={registerCurlExample} onCopy={copy} />
           <Example title="cURL login" value={loginCurlExample} onCopy={copy} />
           <Example title="Cap token in browser" value={captchaTokenExample} onCopy={copy} />
+          <Example
+            title="Cap redeem response"
+            value={captchaRedeemResponseExample}
+            onCopy={copy}
+          />
           <Example title="Login response" value={loginResponseExample} onCopy={copy} />
         </section>
 
@@ -258,6 +326,8 @@ export function ApiDocsPage() {
               <Endpoint method="POST" path="/api/v1/uploads/photos" />
               <Endpoint method="GET/POST" path="/api/v1/photos/:photoId/comments" />
               <Endpoint method="GET/POST" path="/api/v1/social-media" />
+              <Endpoint method="GET" path="/api/v1/push/vapid-public-key" />
+              <Endpoint method="POST/DELETE" path="/api/v1/push/subscriptions" />
             </CardContent>
           </Card>
 

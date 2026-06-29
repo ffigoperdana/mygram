@@ -59,6 +59,7 @@ services:
       PUSH_NOTIFICATIONS_ENABLED: ${PUSH_NOTIFICATIONS_ENABLED:-false}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      # Web Push VAPID contact identity only; not an SMTP recipient.
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
     expose:
       - "8080"

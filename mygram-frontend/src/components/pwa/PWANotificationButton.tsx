@@ -3,77 +3,15 @@ import { Bell, BellOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { mygramApi } from "@/api/mygram";
-import type { Comment, Photo, PushSubscriptionPayload } from "@/api/types";
+import type { PushSubscriptionPayload } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 
-const pollMs = 30_000;
-const iconPath = "/icons/mygram-icon-192.png";
+const blockedPermissionMessage =
+  "Notification sudah diblokir oleh browser. Klik ikon di kiri address bar → Site settings → Notifications → Allow.";
 
-type NotificationDeliveryMode = "push" | "polling" | null;
-
-function ownerId(photo: Photo) {
-  return photo.user_id ?? photo.UserID ?? 0;
-}
-
-function commentOwnerId(comment: Comment) {
-  return comment.user_id ?? comment.UserID ?? 0;
-}
-
-function commentPhotoId(comment: Comment) {
-  return comment.photo_id ?? comment.PhotoID ?? 0;
-}
-
-function maxId(items: Array<{ id: number }>) {
-  return items.reduce((current, item) => Math.max(current, item.id), 0);
-}
-
-function readCursor(key: string) {
-  try {
-    const value = window.localStorage.getItem(key);
-    if (!value) {
-      return null;
-    }
-
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCursor(key: string, value: number) {
-  try {
-    window.localStorage.setItem(key, String(value));
-  } catch {
-    // Notification cursors are a convenience; ignore private browsing storage failures.
-  }
-}
-
-async function showNotification(title: string, body: string, url: string, tag: string) {
-  if (!("Notification" in window) || Notification.permission !== "granted") {
-    return;
-  }
-
-  const notificationOptions: NotificationOptions = {
-    body,
-    icon: iconPath,
-    badge: iconPath,
-    tag,
-    data: { url },
-  };
-
-  if ("serviceWorker" in navigator) {
-    const registration = await navigator.serviceWorker.ready.catch(() => null);
-    if (registration) {
-      await registration.showNotification(title, notificationOptions);
-      return;
-    }
-  }
-
-  new Notification(title, notificationOptions);
-}
+type NotificationDeliveryMode = "push" | null;
 
 function base64UrlToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -113,9 +51,9 @@ export function PWANotificationButton() {
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [isRequesting, setIsRequesting] = useState(false);
   const [deliveryMode, setDeliveryMode] = useState<NotificationDeliveryMode>(null);
-  const isPollingRef = useRef(false);
   const isSyncingPushRef = useRef(false);
   const isSupported = typeof window !== "undefined" && "Notification" in window;
+  const isSecure = typeof window !== "undefined" && window.isSecureContext;
   const pushSupported =
     typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
 
@@ -123,8 +61,6 @@ export function PWANotificationButton() {
     const userId = user?.id ?? "anonymous";
     return {
       preference: `mygram:notifications:${userId}:enabled`,
-      photos: `mygram:notifications:${userId}:last-photo-id`,
-      comments: `mygram:notifications:${userId}:last-comment-id`,
     };
   }, [user?.id]);
 
@@ -134,13 +70,27 @@ export function PWANotificationButton() {
       return;
     }
 
-    setPermission(Notification.permission);
-    setEnabled(window.localStorage.getItem(keys.preference) === "true");
+    const currentPermission = Notification.permission;
+    const storedEnabled = window.localStorage.getItem(keys.preference) === "true";
+    setPermission(currentPermission);
+    setEnabled(storedEnabled && currentPermission === "granted");
+
+    if (currentPermission === "denied" && storedEnabled) {
+      window.localStorage.setItem(keys.preference, "false");
+    }
   }, [isSupported, keys.preference, user?.id]);
+
+  const getServiceWorkerRegistration = useCallback(async () => {
+    const existingRegistration = await navigator.serviceWorker.getRegistration("/");
+    if (existingRegistration) {
+      return existingRegistration;
+    }
+
+    return navigator.serviceWorker.register("/sw.js");
+  }, []);
 
   const registerWebPushSubscription = useCallback(async () => {
     if (!pushSupported || isSyncingPushRef.current) {
-      setDeliveryMode("polling");
       return false;
     }
 
@@ -148,11 +98,10 @@ export function PWANotificationButton() {
     try {
       const vapid = await mygramApi.getPushVapidPublicKey();
       if (!vapid.enabled || !vapid.public_key) {
-        setDeliveryMode("polling");
         return false;
       }
 
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await getServiceWorkerRegistration();
       let subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {
@@ -166,12 +115,12 @@ export function PWANotificationButton() {
       setDeliveryMode("push");
       return true;
     } catch {
-      setDeliveryMode("polling");
+      setDeliveryMode(null);
       return false;
     } finally {
       isSyncingPushRef.current = false;
     }
-  }, [pushSupported]);
+  }, [getServiceWorkerRegistration, pushSupported]);
 
   const unregisterWebPushSubscription = useCallback(async () => {
     if (!pushSupported) {
@@ -192,71 +141,6 @@ export function PWANotificationButton() {
     }
   }, [pushSupported]);
 
-  const pollNotifications = useCallback(async () => {
-    if (!user?.id || isPollingRef.current) {
-      return;
-    }
-
-    isPollingRef.current = true;
-    try {
-      const [photos, comments] = await Promise.all([
-        mygramApi.listPhotos(),
-        mygramApi.listComments(),
-      ]);
-
-      const latestPhotoId = maxId(photos);
-      const latestCommentId = maxId(comments);
-      const previousPhotoId = readCursor(keys.photos);
-      const previousCommentId = readCursor(keys.comments);
-
-      if (previousPhotoId === null || previousCommentId === null) {
-        writeCursor(keys.photos, latestPhotoId);
-        writeCursor(keys.comments, latestCommentId);
-        return;
-      }
-
-      const ownedPhotoIds = new Set(
-        photos.filter((photo) => ownerId(photo) === user.id).map((photo) => photo.id),
-      );
-      const newPhotos = photos.filter(
-        (photo) => photo.id > previousPhotoId && ownerId(photo) !== user.id,
-      );
-      const newCommentsForOwnedPhotos = comments.filter(
-        (comment) =>
-          comment.id > previousCommentId &&
-          ownedPhotoIds.has(commentPhotoId(comment)) &&
-          commentOwnerId(comment) !== user.id,
-      );
-
-      if (newPhotos.length > 0) {
-        await showNotification(
-          "New post on MyGram",
-          `${newPhotos.length} new photo${newPhotos.length > 1 ? "s" : ""} in the feed.`,
-          "/feed",
-          "mygram-new-posts",
-        );
-      }
-
-      if (newCommentsForOwnedPhotos.length > 0) {
-        await showNotification(
-          "New comment on your post",
-          `${newCommentsForOwnedPhotos.length} new comment${
-            newCommentsForOwnedPhotos.length > 1 ? "s" : ""
-          } on your photo${newCommentsForOwnedPhotos.length > 1 ? "s" : ""}.`,
-          "/feed",
-          "mygram-owned-photo-comments",
-        );
-      }
-
-      writeCursor(keys.photos, latestPhotoId);
-      writeCursor(keys.comments, latestCommentId);
-    } catch {
-      // Polling should never interrupt app usage.
-    } finally {
-      isPollingRef.current = false;
-    }
-  }, [keys.comments, keys.photos, user?.id]);
-
   useEffect(() => {
     if (!isAuthenticated || !user?.id || !enabled || permission !== "granted") {
       setDeliveryMode(null);
@@ -266,28 +150,19 @@ export function PWANotificationButton() {
     void registerWebPushSubscription();
   }, [enabled, isAuthenticated, permission, registerWebPushSubscription, user?.id]);
 
-  useEffect(() => {
-    if (
-      !isAuthenticated ||
-      !user?.id ||
-      !enabled ||
-      permission !== "granted" ||
-      deliveryMode !== "polling"
-    ) {
-      return;
-    }
-
-    void pollNotifications();
-    const intervalId = window.setInterval(() => {
-      void pollNotifications();
-    }, pollMs);
-
-    return () => window.clearInterval(intervalId);
-  }, [deliveryMode, enabled, isAuthenticated, permission, pollNotifications, user?.id]);
-
   async function toggleNotifications() {
     if (!isSupported || !user?.id) {
       toast.error("This browser does not support notifications.");
+      return;
+    }
+
+    if (!isSecure) {
+      toast.error("Push notifications require HTTPS or localhost.");
+      return;
+    }
+
+    if (!pushSupported) {
+      toast.error("This browser does not support Web Push notifications.");
       return;
     }
 
@@ -306,10 +181,17 @@ export function PWANotificationButton() {
 
     setIsRequesting(true);
     try {
-      const nextPermission =
-        Notification.permission === "granted"
-          ? "granted"
-          : await Notification.requestPermission();
+      let nextPermission = Notification.permission;
+
+      if (nextPermission === "denied") {
+        setPermission(nextPermission);
+        toast.error(blockedPermissionMessage);
+        return;
+      }
+
+      if (nextPermission === "default") {
+        nextPermission = await Notification.requestPermission();
+      }
 
       setPermission(nextPermission);
       if (nextPermission !== "granted") {
@@ -317,13 +199,15 @@ export function PWANotificationButton() {
         return;
       }
 
-      window.localStorage.setItem(keys.preference, "true");
-      setEnabled(true);
       const registeredForPush = await registerWebPushSubscription();
       if (registeredForPush) {
+        window.localStorage.setItem(keys.preference, "true");
+        setEnabled(true);
         toast.success("Push notifications enabled");
       } else {
-        toast.success("Notifications enabled with app polling fallback");
+        window.localStorage.setItem(keys.preference, "false");
+        setEnabled(false);
+        toast.error("Push notifications are not ready. Check VAPID backend configuration.");
       }
     } finally {
       setIsRequesting(false);
@@ -345,7 +229,7 @@ export function PWANotificationButton() {
         enabled
           ? deliveryMode === "push"
             ? "Pause background push notifications"
-            : "Pause in-app notification checks"
+            : "Pause notifications"
           : "Enable post and comment notifications"
       }
       className={cn(enabled && "border-primary text-primary")}
